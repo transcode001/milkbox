@@ -1,0 +1,75 @@
+{
+  "name": "desktop",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:main\"",
+    "dev:main": "tsx watch src/main.ts",
+    "dev:renderer": "next dev --port 3001",
+    "build": "npm run build:renderer && npm run build:main && npm run package",
+    "build:renderer": "next build",
+    "build:main": "tsc src/main.ts --outDir dist --declaration",
+    "package": "electron-builder",
+    "lint": "eslint --max-warnings 0",
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repo/core": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "electron-squirrel-startup": "^1.0.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.15.3",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "concurrently": "^9.2.0",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8",
+    "eslint": "^9.39.1",
+    "next": "16.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "5.9.2"
+  },
+  "build": {
+    "appId": "com.milkbox.desktop",
+    "productName": "Milkbox Desktop",
+    "files": [
+      "dist/**/*",
+      "public/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "buildResources": "public"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Utility"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

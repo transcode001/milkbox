@@ -1,0 +1,26 @@
+{
+  "name": "milkbox",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev --filter='./apps/*' --parallel",
+    "dev:desktop": "turbo run dev --filter=desktop",
+    "dev:mobile": "turbo run dev --filter=mobile",
+    "dev:mobile:ios": "turbo run dev:ios --filter=mobile",
+    "dev:mobile:android": "turbo run dev:android --filter=mobile",
+    "dev:web": "turbo run dev --filter=web",
+    "dev:docs": "turbo run dev --filter=docs",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\"",
+    "check-types": "turbo run check-types"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4",
+    "turbo": "^2.7.5",
+    "typescript": "5.9.2"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=18"
+  }
+}
