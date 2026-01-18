@@ -1,10 +1,13 @@
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { formatDate } from "@repo/core";
 
 const HomeScreen = () => {
   const handlePress = () => {
     Alert.alert("Button Pressed", "You clicked the button!");
+  };
+
+  const formatDate = (date: Date): string => {
+    return date.toISOString().split("T")[0];
   };
 
   return (
