@@ -22,16 +22,6 @@ const HomeScreen = () => {
       Alert.alert("Error", "Failed to initialize database");
     }
     
-    // const database = await SQLite.openDatabaseAsync('milkbox.db');
-    // setDb(database);
-    
-    // await database.execAsync(`
-    //   CREATE TABLE IF NOT EXISTS items (
-    //     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    //     text TEXT NOT NULL,
-    //     date TEXT NOT NULL
-    //   );
-    // `);
   };
 
   const loadItems = async () => {
