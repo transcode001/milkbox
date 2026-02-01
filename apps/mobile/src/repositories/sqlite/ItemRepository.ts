@@ -1,6 +1,7 @@
 // apps/mobile/src/repositories/sqlite/ItemRepository.ts
 import * as SQLite from 'expo-sqlite';
 import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export class SQLiteItemRepository implements IItemRepository {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -8,10 +9,39 @@ export class SQLiteItemRepository implements IItemRepository {
   async initialize(): Promise<void> {
     this.db = await SQLite.openDatabaseAsync('milkbox.db');
     await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      );
+    `);
+    await this.db.execAsync(`
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER NOT NULL,
         text TEXT NOT NULL,
-        date TEXT NOT NULL
+        date TEXT NOT NULL,
+        FOREIGN KEY (categoryId) REFERENCES categories(id)
+      );
+    `);
+  }
+
+  async clear(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execAsync('DROP TABLE IF EXISTS items');
+    await this.db.execAsync('DROP TABLE IF EXISTS categories');
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+      );
+    `);
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        date TEXT NOT NULL,
+        FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
   }
@@ -32,12 +62,12 @@ export class SQLiteItemRepository implements IItemRepository {
     return result || null;
   }
 
-  async create(text: string): Promise<SavedItem> {
+  async create(id: number,text: string): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
     const date = new Date().toISOString();
     const result = await this.db.runAsync(
-      'INSERT INTO items (text, date) VALUES (?, ?)',
-      [text, date]
+      'INSERT INTO items (categoryId, text, date) VALUES (?, ?, ?)',
+      [id,text, date]
     );
     return {
       id: result.lastInsertRowId,

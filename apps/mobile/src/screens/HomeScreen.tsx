@@ -1,15 +1,26 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, FlatList } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, FlatList, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
-import * as SQLite from 'expo-sqlite';
+import { Picker } from '@react-native-picker/picker';
 import { SQLiteItemRepository } from "../repositories/sqlite/ItemRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
+
+interface Option {
+  value: string;
+  label: string;
+}
+
+const options: Option[] = [
+  { value: '1', label: 'Option 1' },
+  { value: '2', label: 'Option 2' },
+  { value: '3', label: 'Option 3' },
+];
 
 const HomeScreen = () => {
   const [text, setText] = useState("");
   const [items, setItems] = useState<SavedItem[]>([]);
-  const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
   const [repository] = useState(() => new SQLiteItemRepository());
+  const [selectedOption, setSelectedOption] = useState<string>(options[0].value);
   useEffect(() => {
     initDatabase();
   }, []);
@@ -17,16 +28,19 @@ const HomeScreen = () => {
   const initDatabase = async () => {
     try{
       await repository.initialize();
+      // 開発モード時のみDBをクリア
+      if (__DEV__) {
+        await repository.clear();
+      }
       await loadItems();
     }catch(error){
-      Alert.alert("Error", "Failed to initialize database");
+      Alert.alert("Error", error.message);
     }
-    
   };
 
   const loadItems = async () => {
     try {
-      const result = await await repository.findAll();
+      const result = await repository.findAll();
       setItems(result);
     } catch (error) {
       Alert.alert("Error", "Failed to load data");
@@ -44,7 +58,7 @@ const HomeScreen = () => {
     }
 
     try {
-      await repository.create(text);
+      await repository.create(Number(selectedOption), text);
       setText("");
       Alert.alert("Success", "Data saved!");
       await loadItems();
@@ -60,15 +74,6 @@ const HomeScreen = () => {
     }catch(error){
       Alert.alert("Error", "Failed to delete data");
     }
-
-    // if (!db) return;
-    
-    // try {
-    //   await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
-    //   loadItems();
-    // } catch (error) {
-    //   Alert.alert("Error", "Failed to delete data");
-    // }
   };
 
   const formatDate = (date: Date): string => {
@@ -84,6 +89,20 @@ const HomeScreen = () => {
         <TouchableOpacity style={styles.button} onPress={handlePress}>
           <Text style={styles.buttonText}>Click Me</Text>
         </TouchableOpacity>
+
+        <View style={styles.pickerContainer}>
+          <Picker
+            selectedValue={selectedOption}
+            onValueChange={(itemValue) => setSelectedOption(itemValue)}
+            style={styles.picker}
+            itemStyle={ styles.pickerItem  }
+          >
+            {options.map((option) => (
+              <Picker.Item key={option.value} label={option.label} value={option.value} />
+            ))}
+          </Picker>
+          <Text style={styles.selectedText}>選択されたオプション: {selectedOption}</Text>
+        </View>
         
         <View style={styles.formContainer}>
           <TextInput
@@ -157,6 +176,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: 8,
     alignSelf: "center",
+  },
+  pickerContainer: {
+    marginTop: 20,
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  picker: {
+    height: Platform.OS === 'ios' ? 150 : 50,
+  },
+    pickerItem: {
+    height: 150, // iOSのみ
+  },
+  selectedText: {
+    padding: 10,
+    fontSize: 14,
+    color: '#666',
   },
   buttonText: {
     color: "#fff",
