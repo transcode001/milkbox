@@ -32,16 +32,16 @@ export class SQLiteItemRepository implements IItemRepository {
     return result || null;
   }
 
-  async create(data: CreateItemDto): Promise<SavedItem> {
+  async create(text: string): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
     const date = new Date().toISOString();
     const result = await this.db.runAsync(
       'INSERT INTO items (text, date) VALUES (?, ?)',
-      [data.text, date]
+      [text, date]
     );
     return {
       id: result.lastInsertRowId,
-      text: data.text,
+      text: text,
       date,
     };
   }

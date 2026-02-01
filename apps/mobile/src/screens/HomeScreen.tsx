@@ -2,40 +2,41 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, FlatList } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import * as SQLite from 'expo-sqlite';
-
-interface SavedItem {
-  id: number;
-  text: string;
-  date: string;
-}
+import { SQLiteItemRepository } from "../repositories/sqlite/ItemRepository";
+import { SavedItem } from "@milkbox/shared/repositories/types";
 
 const HomeScreen = () => {
   const [text, setText] = useState("");
   const [items, setItems] = useState<SavedItem[]>([]);
   const [db, setDb] = useState<SQLite.SQLiteDatabase | null>(null);
-
+  const [repository] = useState(() => new SQLiteItemRepository());
   useEffect(() => {
     initDatabase();
   }, []);
 
   const initDatabase = async () => {
-    const database = await SQLite.openDatabaseAsync('milkbox.db');
-    setDb(database);
+    try{
+      await repository.initialize();
+      await loadItems();
+    }catch(error){
+      Alert.alert("Error", "Failed to initialize database");
+    }
     
-    await database.execAsync(`
-      CREATE TABLE IF NOT EXISTS items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        text TEXT NOT NULL,
-        date TEXT NOT NULL
-      );
-    `);
+    // const database = await SQLite.openDatabaseAsync('milkbox.db');
+    // setDb(database);
     
-    loadItems(database);
+    // await database.execAsync(`
+    //   CREATE TABLE IF NOT EXISTS items (
+    //     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    //     text TEXT NOT NULL,
+    //     date TEXT NOT NULL
+    //   );
+    // `);
   };
 
-  const loadItems = async (database: SQLite.SQLiteDatabase) => {
+  const loadItems = async () => {
     try {
-      const result = await database.getAllAsync<SavedItem>('SELECT * FROM items ORDER BY id DESC');
+      const result = await await repository.findAll();
       setItems(result);
     } catch (error) {
       Alert.alert("Error", "Failed to load data");
@@ -47,34 +48,37 @@ const HomeScreen = () => {
   };
 
   const handleSubmit = async () => {
-    if (!text.trim() || !db) {
+    if (!text.trim()) {
       Alert.alert("Error", "Please enter some text");
       return;
     }
 
     try {
-      await db.runAsync(
-        'INSERT INTO items (text, date) VALUES (?, ?)',
-        [text, new Date().toISOString()]
-      );
-      
+      await repository.create(text);
       setText("");
-      loadItems(db);
       Alert.alert("Success", "Data saved!");
+      await loadItems();
     } catch (error) {
       Alert.alert("Error", "Failed to save data");
     }
   };
 
   const deleteItem = async (id: number) => {
-    if (!db) return;
-    
-    try {
-      await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
-      loadItems(db);
-    } catch (error) {
+    try{
+      await repository.delete(id);
+      await loadItems();
+    }catch(error){
       Alert.alert("Error", "Failed to delete data");
     }
+
+    // if (!db) return;
+    
+    // try {
+    //   await db.runAsync('DELETE FROM items WHERE id = ?', [id]);
+    //   loadItems();
+    // } catch (error) {
+    //   Alert.alert("Error", "Failed to delete data");
+    // }
   };
 
   const formatDate = (date: Date): string => {
