@@ -129,7 +129,7 @@ const HomeScreen = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.pickerContainer}>
           <View style={styles.pickerHeader}>
