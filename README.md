@@ -8,8 +8,9 @@ An application that enables grouping and managing tasks efficiently.
 - Multi-platform support (Web, Desktop, Mobile)
 - Scheduler pairing (planned)
 
-![Home](/assets/home.png)
-![Add Task](/assets/addtask.png)
+| Home | Add Task |
+| --- | --- |
+| ![Home](/assets/home.png) | ![Add Task](/assets/addtask.png) |
 
 ## Project Structure
 
