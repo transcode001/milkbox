@@ -18,7 +18,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
     return items.find(item => item.id === id) || null;
   }
 
-  async create(text: string): Promise<SavedItem> {
+  async create(id:number,text: string): Promise<SavedItem> {
     const items = await this.findAll();
     const newItem: SavedItem = {
       id: Date.now(),
