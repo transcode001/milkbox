@@ -1,240 +1,105 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, SectionList, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
-import { Picker } from '@react-native-picker/picker';
+import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../navigation/types";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
-import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 
-interface Option {
-  value: string;
-  label: string;
-}
 interface CategorySection {
   title: string;
   data: SavedItem[];
 }
 
-const HomeScreen = () => {
-  const [text, setText] = useState("");
-  const [items, setItems] = useState<CategorySection[]>([]);
+type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+
+const HomeScreen = ({ navigation }: Props) => {
+  const [sections, setSections] = useState<CategorySection[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dbManager] = useState(() => new DatabaseManager());
-  const [selectedOption, setSelectedOption] = useState<string>("1");
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
 
   useEffect(() => {
-    initDatabase();
+    loadItems();
   }, []);
 
-  const initDatabase = async () => {
-    try{
-      await dbManager.initialize();
-      // 開発モード時のみDBをクリア
-      if (__DEV__) {
-        await dbManager.clearAll();
-      }
-      await loadCategories();
-      await loadItems();
-    }catch(error){
-      Alert.alert("Error", error.message);
-    }
-  };
-
-  const loadCategories = async () => {
-    try {
-      const result = await dbManager.categoryRepository.findAll();
-      setCategories(result);
-      if (result.length > 0 && !selectedOption) {
-        setSelectedOption(result[0].id.toString());
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to load categories");
-    }
-  };
+  useFocusEffect(
+    useCallback(() => {
+      loadItems();
+    }, [])
+  );
 
   const loadItems = async () => {
     try {
+      setLoading(true);
+      setErrorMessage(null);
+      await dbManager.initialize();
       const result = await dbManager.itemRepository.findAllWithCategory();
-      
-      // カテゴリ別にグループ化
       const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || 'Unknown';
-        const existing = acc.find(section => section.title === categoryName);
-        
+        const categoryName = item.categoryName || "Unknown";
+        const existing = acc.find((section) => section.title === categoryName);
+
         if (existing) {
           existing.data.push(item);
         } else {
           acc.push({ title: categoryName, data: [item] });
         }
-        
+
         return acc;
       }, [] as CategorySection[]);
-      
-      setItems(grouped);
+
+      setSections(grouped);
     } catch (error) {
-      Alert.alert("Error", "Failed to load data");
+      setErrorMessage("Failed to load items");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handlePress = () => {
-    Alert.alert("Button Pressed", "You clicked the button!");
-  };
-
-  const handleSubmit = async () => {
-    if (!text.trim()) {
-      Alert.alert("Error", "Please enter some text");
-      return;
-    }
-
-    try {
-      await dbManager.itemRepository.create(Number(selectedOption), text);
-      setText("");
-      Alert.alert("Success", "Data saved!");
-      await loadItems();
-    } catch (error) {
-      Alert.alert("Error", "Failed to save data");
-    }
-  };
-
-  const deleteItem = async (id: number) => {
-    try{
-      await dbManager.itemRepository.delete(id);
-      await loadItems();
-    }catch(error){
-      Alert.alert("Error", "Failed to delete data");
-    }
-  };
-
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) {
-      Alert.alert("Error", "Please enter category name");
-      return;
-    }
-
-    try {
-      await dbManager.categoryRepository.create(newCategoryName);
-      setNewCategoryName("");
-      setShowAddCategoryModal(false);
-      await loadCategories();
-      Alert.alert("Success", "Category added!");
-    } catch (error) {
-      Alert.alert("Error", "Failed to add category");
-    }
-  };
-
-  const formatDate = (date: Date): string => {
-    return date.toISOString().split("T")[0];
+  const handleNavigateAddTask = () => {
+    navigation.navigate("AddTask");
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.pickerContainer}>
-          <View style={styles.pickerHeader}>
-            <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
-            <TouchableOpacity 
-              style={styles.addCategoryButton}
-              onPress={() => setShowAddCategoryModal(true)}
-            >
-              <Text style={styles.addCategoryButtonText}>+ 追加</Text>
-            </TouchableOpacity>
-          </View>
-          <Picker
-            selectedValue={selectedOption}
-            onValueChange={(itemValue) => setSelectedOption(itemValue)}
-            style={styles.picker}
-            itemStyle={ styles.pickerItem  }
-          >
-            {categories.map((category) => (
-              <Picker.Item 
-                key={category.id} 
-                label={category.name} 
-                value={category.id.toString()} 
-              />
-            ))}
-          </Picker>
-        </View>
-
-        {/* カテゴリ追加モーダル */}
-        <Modal
-          visible={showAddCategoryModal}
-          transparent={true}
-          animationType="slide"
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>新しいカテゴリを追加</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={newCategoryName}
-                onChangeText={setNewCategoryName}
-                placeholder="カテゴリ名を入力"
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => {
-                    setNewCategoryName("");
-                    setShowAddCategoryModal(false);
-                  }}
-                >
-                  <Text style={styles.modalButtonText}>キャンセル</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSubmit]}
-                  onPress={handleAddCategory}
-                >
-                  <Text style={styles.modalButtonText}>追加</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-        
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.textarea}
-            value={text}
-            onChangeText={setText}
-            placeholder="Enter text here"
-            multiline
-          />
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.buttonText}>Submit</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.listContainer}>
-          <Text style={styles.listTitle}>
-            Saved Items ({items.reduce((sum, section) => sum + section.data.length, 0)}):
-          </Text>
-          <SectionList
-            sections={items}
-            keyExtractor={(item) => item.id.toString()}
-            renderSectionHeader={({ section: { title } }) => (
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionHeaderText}>{title}</Text>
-              </View>
-            )}
-            renderItem={({ item }) => (
-              <View style={styles.itemContainer}>
-                <View style={styles.itemTextContainer}>
-                  <Text style={styles.itemText}>{item.text}</Text>
-                  <Text style={styles.itemDate}>{new Date(item.date).toLocaleString()}</Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.deleteButton}
-                  onPress={() => deleteItem(item.id)}
-                >
-                  <Text style={styles.deleteButtonText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          />
-        </View>
+    <SafeAreaView style={styles.container} edges={["top"]}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Items by Category</Text>
+        <TouchableOpacity style={styles.button} onPress={handleNavigateAddTask}>
+          <Text style={styles.buttonText}>Go to Add Task</Text>
+        </TouchableOpacity>
       </View>
+
+      {loading ? (
+        <View style={styles.stateContainer}>
+          <ActivityIndicator size="large" />
+        </View>
+      ) : errorMessage ? (
+        <View style={styles.stateContainer}>
+          <Text style={styles.stateText}>{errorMessage}</Text>
+        </View>
+      ) : sections.length === 0 ? (
+        <View style={styles.stateContainer}>
+          <Text style={styles.stateText}>No items yet</Text>
+        </View>
+      ) : (
+        <SectionList
+          sections={sections}
+          keyExtractor={(item) => item.id.toString()}
+          contentContainerStyle={styles.listContent}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionHeaderText}>{section.title}</Text>
+            </View>
+          )}
+          renderItem={({ item }) => (
+            <View style={styles.itemContainer}>
+              <Text style={styles.itemText}>{item.text}</Text>
+              <Text style={styles.itemDate}>{new Date(item.date).toLocaleString()}</Text>
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -244,198 +109,64 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  content: {
-    flex: 1,
-    padding: 20,
+  header: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  date: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 24,
-    textAlign: "center",
+    fontSize: 20,
+    fontWeight: "700",
+    marginBottom: 10,
   },
   button: {
-    backgroundColor: "#007AFF",
+    alignSelf: "flex-start",
+    backgroundColor: "#111",
     paddingVertical: 12,
-    paddingHorizontal: 24,
+    paddingHorizontal: 18,
     borderRadius: 8,
-    alignSelf: "center",
-  },
-  pickerContainer: {
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  pickerLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  addCategoryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  addCategoryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  picker: {
-    height: Platform.OS === 'ios' ? 150 : 50,
-  },
-    pickerItem: {
-    height: 150, // iOSのみ
-  },
-  selectedText: {
-    padding: 10,
-    fontSize: 14,
-    color: '#666',
   },
   buttonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "600",
   },
-  formContainer: {
-    marginTop: 20,
-    width: '100%',
-  },
-  textarea: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  submitButton: {
-    backgroundColor: "#28a745",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  listContainer: {
-    marginTop: 20,
-    flex: 1,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  itemTextContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  itemText: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  itemDate: {
-    fontSize: 10,
-    color: '#999',
-  },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#ccc',
-  },
-  modalButtonSubmit: {
-    backgroundColor: '#007AFF',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+  listContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   sectionHeader: {
-    backgroundColor: '#007AFF',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 8,
+    paddingVertical: 8,
   },
   sectionHeaderText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: "700",
+  },
+  itemContainer: {
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  itemText: {
+    fontSize: 15,
+    fontWeight: "500",
+  },
+  itemDate: {
+    marginTop: 4,
+    fontSize: 12,
+    color: "#666",
+  },
+  stateContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  stateText: {
+    fontSize: 14,
+    color: "#666",
   },
 });
 
