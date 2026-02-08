@@ -64,7 +64,7 @@ pnpm dev:desktop
 ## Build
 
 ```bash
-# Build all apps
+# Build all apps(Under adjustment)
 pnpm build
 
 # Build specific app
