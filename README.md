@@ -49,13 +49,13 @@ pnpm dev:mobile:ios
 pnpm dev:mobile:android
 ```
 
-### Web App
+### Web App(Under adjustment)
 
 ```bash
 pnpm dev:web
 ```
 
-### Desktop App
+### Desktop App(Under adjustment)
 
 ```bash
 pnpm dev:desktop
