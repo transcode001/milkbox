@@ -8,6 +8,10 @@ An application that enables grouping and managing tasks efficiently.
 - Multi-platform support (Web, Desktop, Mobile)
 - Scheduler pairing (planned)
 
+| Home | Add Task |
+| --- | --- |
+| ![Home](/assets/home.png) | ![Add Task](/assets/addtask.png) |
+
 ## Project Structure
 
 ### Apps
@@ -49,13 +53,13 @@ pnpm dev:mobile:ios
 pnpm dev:mobile:android
 ```
 
-### Web App
+### Web App(Under adjustment)
 
 ```bash
 pnpm dev:web
 ```
 
-### Desktop App
+### Desktop App(Under adjustment)
 
 ```bash
 pnpm dev:desktop
@@ -64,7 +68,7 @@ pnpm dev:desktop
 ## Build
 
 ```bash
-# Build all apps
+# Build all apps(Under adjustment)
 pnpm build
 
 # Build specific app
