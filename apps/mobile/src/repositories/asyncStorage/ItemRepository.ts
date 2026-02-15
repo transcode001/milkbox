@@ -18,12 +18,15 @@ export class AsyncStorageItemRepository implements IItemRepository {
     return items.find(item => item.id === id) || null;
   }
 
-  async create(id:number,text: string): Promise<SavedItem> {
+  async create(data: CreateItemDto): Promise<SavedItem> {
     const items = await this.findAll();
     const newItem: SavedItem = {
       id: Date.now(),
-      text: text,
-      date: new Date().toISOString(),
+      categoryId: data.categoryId,
+      text: data.text,
+      date: data.date,
+      startDate: data.startDate,
+      endDate: data.endDate,
     };
     items.unshift(newItem);
     await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));

@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface CategorySection {
   title: string;
@@ -19,6 +20,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dbManager] = useState(() => new DatabaseManager());
+  const devDbClearKey = "dev_db_cleared_v1";
 
   useEffect(() => {
     loadItems();
@@ -35,6 +37,13 @@ const HomeScreen = ({ navigation }: Props) => {
       setLoading(true);
       setErrorMessage(null);
       await dbManager.initialize();
+      if (__DEV__) {
+        const cleared = await AsyncStorage.getItem(devDbClearKey);
+        if (!cleared) {
+          await dbManager.clearAll();
+          await AsyncStorage.setItem(devDbClearKey, "1");
+        }
+      }
       const result = await dbManager.itemRepository.findAllWithCategory();
       const grouped = result.reduce((acc, item) => {
         const categoryName = item.categoryName || "Unknown";
@@ -59,6 +68,16 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleNavigateAddTask = () => {
     navigation.navigate("AddTask");
+  };
+
+  const formatItemDate = (value?: string) => {
+    if (!value) return "-";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}.${month}.${day}`;
   };
 
   return (
@@ -95,7 +114,16 @@ const HomeScreen = ({ navigation }: Props) => {
           renderItem={({ item }) => (
             <View style={styles.itemContainer}>
               <Text style={styles.itemText}>{item.text}</Text>
-              <Text style={styles.itemDate}>{new Date(item.date).toLocaleString()}</Text>
+              <View style={styles.itemDateRow}>
+                <View style={styles.itemDateColumn}>
+                  <Text style={styles.itemDateLabel}>開始日</Text>
+                  <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
+                </View>
+                <View style={styles.itemDateColumn}>
+                  <Text style={styles.itemDateLabel}>終了日</Text>
+                  <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
+                </View>
+              </View>
             </View>
           )}
         />
@@ -153,8 +181,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
-  itemDate: {
-    marginTop: 4,
+  itemDateRow: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 6,
+  },
+  itemDateColumn: {
+    flex: 1,
+  },
+  itemDateLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#444",
+    marginBottom: 2,
+  },
+  itemDateValue: {
     fontSize: 12,
     color: "#666",
   },

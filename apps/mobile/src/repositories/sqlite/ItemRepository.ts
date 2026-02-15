@@ -20,6 +20,8 @@ export class SQLiteItemRepository implements IItemRepository {
         categoryId INTEGER NOT NULL,
         text TEXT NOT NULL,
         date TEXT NOT NULL,
+        startDate TEXT,
+        endDate TEXT,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -46,6 +48,8 @@ export class SQLiteItemRepository implements IItemRepository {
         items.categoryId,
         items.text,
         items.date,
+        items.startDate,
+        items.endDate,
         categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
@@ -62,18 +66,20 @@ export class SQLiteItemRepository implements IItemRepository {
     return result || null;
   }
 
-  async create(categoryId: number, text: string): Promise<SavedItem> {
+  async create(data: CreateItemDto): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
-    const date = new Date().toISOString();
+    if (data.categoryId == null) throw new Error('categoryId is required');
     const result = await this.db.runAsync(
-      'INSERT INTO items (categoryId, text, date) VALUES (?, ?, ?)',
-      [categoryId, text, date]
+      'INSERT INTO items (categoryId, text, date, startDate, endDate) VALUES (?, ?, ?, ?, ?)',
+      [data.categoryId, data.text, data.date, data.startDate ?? null, data.endDate ?? null]
     );
     return {
       id: result.lastInsertRowId,
-      categoryId,
-      text: text,
-      date,
+      categoryId: data.categoryId,
+      text: data.text,
+      date: data.date,
+      startDate: data.startDate,
+      endDate: data.endDate,
     };
   }
 

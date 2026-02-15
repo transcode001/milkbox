@@ -1,7 +1,8 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
@@ -17,6 +18,8 @@ interface CategorySection {
 }
 
 const AddTaskScreen = () => {
+  const { width } = useWindowDimensions();
+  const isNarrowScreen = width < 360;
   const [text, setText] = useState("");
   const [items, setItems] = useState<CategorySection[]>([]);
   const [dbManager] = useState(() => new DatabaseManager());
@@ -24,6 +27,14 @@ const AddTaskScreen = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [startDate, setStartDate] = useState(new Date());
+  const [endDate, setEndDate] = useState(new Date());
+  const [datePickerVisible, setDatePickerVisible] = useState<boolean>(Platform.OS === 'ios');
+  const [timePickerVisible, setTimePickerVisible] = useState<boolean>(Platform.OS === 'ios');
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+  };
 
   useEffect(() => {
     initDatabase();
@@ -84,11 +95,18 @@ const AddTaskScreen = () => {
     }
   };
 
-  const handlePress = () => {
-    Alert.alert("Button Pressed", "You clicked the button!");
+  const onDateChange = (event: any, selectedDate: Date | undefined) => {
+    const currentDate = selectedDate || startDate;
+    setDatePickerVisible(Platform.OS === 'ios');
+    setStartDate(currentDate);
   };
 
-
+  const onEndDateChange = (event: any, selectedDate: Date | undefined) => {
+    const currentDate = selectedDate || endDate;
+    setDatePickerVisible(Platform.OS === 'ios');
+    setEndDate(currentDate);
+  };
+  
   const handleSubmit = async () => {
     if (!text.trim()) {
       Alert.alert("Error", "Please enter some text");
@@ -96,7 +114,13 @@ const AddTaskScreen = () => {
     }
 
     try {
-      await dbManager.itemRepository.create(Number(selectedOption), text);
+      await dbManager.itemRepository.create({
+        categoryId: Number(selectedOption),
+        text,
+        date: startDate.toISOString(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      });
       setText("");
       Alert.alert("Success", "Data saved!");
       await loadItems();
@@ -208,6 +232,34 @@ const AddTaskScreen = () => {
             placeholder="Enter text here"
             multiline
           />
+        {datePickerVisible && (
+          <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
+            <View style={styles.dateColumn}>
+              <Text style={styles.dateLabel}>開始日</Text>
+              <DateTimePicker
+                value={startDate}
+                mode="date"
+                is24Hour={true}
+                display="default"
+                onChange={onDateChange}
+                locale="ja-JP"
+                style={styles.datePicker}
+              />
+            </View>
+            <View style={styles.dateColumn}>
+              <Text style={styles.dateLabel}>終了日</Text>
+              <DateTimePicker
+                value={endDate}
+                mode="date"
+                is24Hour={true}
+                display="default"
+                onChange={onEndDateChange}
+                locale="ja-JP"
+                style={styles.datePicker}
+              />
+            </View>
+          </View>
+        )}
           <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
             <Text style={styles.buttonText}>Submit</Text>
           </TouchableOpacity>
@@ -254,6 +306,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: 20,
+    paddingTop: 8,
   },
   title: {
     fontSize: 28,
@@ -273,6 +326,25 @@ const styles = StyleSheet.create({
     marginBottom: 24,
     textAlign: "center",
   },
+  dateLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  dateRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  dateRowStacked: {
+    flexDirection: "column",
+  },
+  dateColumn: {
+    flex: 1,
+  },
+  datePicker: {
+    marginBottom: 8,
+  },
   button: {
     backgroundColor: "#007AFF",
     paddingVertical: 12,
@@ -281,7 +353,7 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
   pickerContainer: {
-    marginTop: 20,
+    marginTop: 8,
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 8,
