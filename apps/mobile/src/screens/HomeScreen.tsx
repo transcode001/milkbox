@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, SectionList, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../navigation/types";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { RootTabParamList } from "../navigation/types";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -13,7 +13,7 @@ interface CategorySection {
   data: SavedItem[];
 }
 
-type Props = NativeStackScreenProps<RootStackParamList, "Home">;
+type Props = BottomTabScreenProps<RootTabParamList, "Home">;
 
 const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
@@ -84,9 +84,6 @@ const HomeScreen = ({ navigation }: Props) => {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Items by Category</Text>
-        <TouchableOpacity style={styles.button} onPress={handleNavigateAddTask}>
-          <Text style={styles.buttonText}>Add Task</Text>
-        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -148,18 +145,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 10,
-  },
-  button: {
-    alignSelf: "flex-start",
-    backgroundColor: "#111",
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
   },
   listContent: {
     paddingHorizontal: 20,
