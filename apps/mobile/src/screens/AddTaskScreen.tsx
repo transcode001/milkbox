@@ -1,7 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Picker } from '@react-native-picker/picker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
@@ -24,6 +25,13 @@ const AddTaskScreen = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [startDate, setStartDate] = useState(new Date());
+  const [datePickerVisible, setDatePickerVisible] = useState<boolean>(Platform.OS === 'ios');
+  const [timePickerVisible, setTimePickerVisible] = useState<boolean>(Platform.OS === 'ios');
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+  };
 
   useEffect(() => {
     initDatabase();
@@ -84,11 +92,12 @@ const AddTaskScreen = () => {
     }
   };
 
-  const handlePress = () => {
-    Alert.alert("Button Pressed", "You clicked the button!");
+  const onDateChange = (event: any, selectedDate: Date | undefined) => {
+    const currentDate = selectedDate || startDate;
+    setDatePickerVisible(Platform.OS === 'ios');
+    setStartDate(currentDate);
   };
-
-
+  
   const handleSubmit = async () => {
     if (!text.trim()) {
       Alert.alert("Error", "Please enter some text");
@@ -96,7 +105,12 @@ const AddTaskScreen = () => {
     }
 
     try {
-      await dbManager.itemRepository.create(Number(selectedOption), text);
+      await dbManager.itemRepository.create({
+        categoryId: Number(selectedOption),
+        text,
+        date: startDate.toISOString(),
+        startDate: startDate.toISOString(),
+      });
       setText("");
       Alert.alert("Success", "Data saved!");
       await loadItems();
@@ -208,6 +222,17 @@ const AddTaskScreen = () => {
             placeholder="Enter text here"
             multiline
           />
+        { datePickerVisible &&
+          <DateTimePicker
+            value={startDate}
+            mode="date"
+            is24Hour={true}
+            display="default"
+            onChange={onDateChange}
+            locale="ja-JP"
+            style={{marginBottom: 20}}
+          />
+        }
           <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
             <Text style={styles.buttonText}>Submit</Text>
           </TouchableOpacity>

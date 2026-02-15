@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../navigation/types";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface CategorySection {
   title: string;
@@ -19,6 +20,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [dbManager] = useState(() => new DatabaseManager());
+  const devDbClearKey = "dev_db_cleared_v1";
 
   useEffect(() => {
     loadItems();
@@ -35,6 +37,13 @@ const HomeScreen = ({ navigation }: Props) => {
       setLoading(true);
       setErrorMessage(null);
       await dbManager.initialize();
+      if (__DEV__) {
+        const cleared = await AsyncStorage.getItem(devDbClearKey);
+        if (!cleared) {
+          await dbManager.clearAll();
+          await AsyncStorage.setItem(devDbClearKey, "1");
+        }
+      }
       const result = await dbManager.itemRepository.findAllWithCategory();
       const grouped = result.reduce((acc, item) => {
         const categoryName = item.categoryName || "Unknown";
@@ -95,7 +104,7 @@ const HomeScreen = ({ navigation }: Props) => {
           renderItem={({ item }) => (
             <View style={styles.itemContainer}>
               <Text style={styles.itemText}>{item.text}</Text>
-              <Text style={styles.itemDate}>{new Date(item.date).toLocaleString()}</Text>
+              <Text style={styles.itemDate}>{new Date(item.startDate).toLocaleString()}</Text>
             </View>
           )}
         />

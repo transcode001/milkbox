@@ -27,5 +27,11 @@
     "overrides": {
       "@types/react": "~18.2.0"
     }
+  },
+  "dependencies": {
+    "@chakra-ui/react": "^3.33.0",
+    "@emotion/react": "^11",
+    "@emotion/styled": "^11",
+    "framer-motion": "^6"
   }
 }
