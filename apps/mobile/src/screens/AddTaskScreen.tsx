@@ -8,10 +8,6 @@ import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 
-interface Option {
-  value: string;
-  label: string;
-}
 interface CategorySection {
   title: string;
   data: SavedItem[];
@@ -23,7 +19,8 @@ const AddTaskScreen = () => {
   const [text, setText] = useState("");
   const [items, setItems] = useState<CategorySection[]>([]);
   const [dbManager] = useState(() => new DatabaseManager());
-  const [selectedOption, setSelectedOption] = useState<string>("1");
+  const [selectedOption, setSelectedOption] = useState<string>("");
+  const [noCategoryChecked, setNoCategoryChecked] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
@@ -63,7 +60,7 @@ const AddTaskScreen = () => {
     try {
       const result = await dbManager.categoryRepository.findAll();
       setCategories(result);
-      if (result.length > 0 && !selectedOption) {
+      if (result.length > 0 && (!selectedOption || !result.some((category) => category.id.toString() === selectedOption))) {
         setSelectedOption(result[0].id.toString());
       }
     } catch (error) {
@@ -113,9 +110,14 @@ const AddTaskScreen = () => {
       return;
     }
 
+    if (!noCategoryChecked && !selectedOption) {
+      Alert.alert("Error", "カテゴリを選択してください");
+      return;
+    }
+
     try {
       await dbManager.itemRepository.create({
-        categoryId: Number(selectedOption),
+        categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         text,
         date: startDate.toISOString(),
         startDate: startDate.toISOString(),
@@ -172,10 +174,23 @@ const AddTaskScreen = () => {
               <Text style={styles.addCategoryButtonText}>+ 追加</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity
+            style={styles.checkboxRow}
+            onPress={() => setNoCategoryChecked((prev) => !prev)}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
+              {noCategoryChecked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+            </View>
+            <Text style={styles.checkboxLabel}>カテゴリ指定しない</Text>
+          </TouchableOpacity>
+
           <Picker
             selectedValue={selectedOption}
             onValueChange={(itemValue) => setSelectedOption(itemValue)}
-            style={styles.picker}
+            enabled={!noCategoryChecked}
+            style={[styles.picker, noCategoryChecked && styles.pickerDisabled]}
             itemStyle={ styles.pickerItem  }
           >
             {categories.map((category) => (
@@ -383,8 +398,40 @@ const styles = StyleSheet.create({
   picker: {
     height: Platform.OS === 'ios' ? 150 : 50,
   },
-    pickerItem: {
+  pickerDisabled: {
+    opacity: 0.5,
+  },
+  pickerItem: {
     height: 150, // iOSのみ
+  },
+  checkboxRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  checkbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: "#888",
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    backgroundColor: "#fff",
+  },
+  checkboxChecked: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  checkboxMark: {
+    color: "#fff",
+    fontWeight: "700",
+    lineHeight: 16,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#333",
   },
   selectedText: {
     padding: 10,

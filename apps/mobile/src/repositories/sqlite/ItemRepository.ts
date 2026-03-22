@@ -17,7 +17,7 @@ export class SQLiteItemRepository implements IItemRepository {
     await this.db.execAsync(`
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        categoryId INTEGER NOT NULL,
+        categoryId INTEGER,
         text TEXT NOT NULL,
         date TEXT NOT NULL,
         startDate TEXT,
@@ -25,6 +25,35 @@ export class SQLiteItemRepository implements IItemRepository {
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
+
+    type TableInfoRow = {
+      name: string;
+      notnull: number;
+    };
+
+    const tableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
+    const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
+
+    // Migrate older table definitions where categoryId was NOT NULL.
+    if (categoryIdColumn?.notnull === 1) {
+      await this.db.execAsync(`
+        BEGIN TRANSACTION;
+        CREATE TABLE items_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          categoryId INTEGER,
+          text TEXT NOT NULL,
+          date TEXT NOT NULL,
+          startDate TEXT,
+          endDate TEXT,
+          FOREIGN KEY (categoryId) REFERENCES categories(id)
+        );
+        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate)
+        SELECT id, categoryId, text, date, startDate, endDate FROM items;
+        DROP TABLE items;
+        ALTER TABLE items_new RENAME TO items;
+        COMMIT;
+      `);
+    }
   }
 
   async clear(): Promise<void> {
@@ -68,10 +97,9 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async create(data: CreateItemDto): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
-    if (data.categoryId == null) throw new Error('categoryId is required');
     const result = await this.db.runAsync(
       'INSERT INTO items (categoryId, text, date, startDate, endDate) VALUES (?, ?, ?, ?, ?)',
-      [data.categoryId, data.text, data.date, data.startDate ?? null, data.endDate ?? null]
+      [data.categoryId ?? null, data.text, data.date, data.startDate ?? null, data.endDate ?? null]
     );
     return {
       id: result.lastInsertRowId,
