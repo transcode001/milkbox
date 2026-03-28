@@ -18,6 +18,10 @@ coverage
 # Turbo
 .turbo
 
+# Expo local state
+.expo/
+apps/mobile/.expo/
+
 # Vercel
 .vercel
 
