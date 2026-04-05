@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions } from "react-native";
+import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
 import { Picker } from '@react-native-picker/picker';
@@ -110,6 +110,14 @@ const AddTaskScreen = () => {
       return;
     }
 
+    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+    if (endDateOnly < startDateOnly) {
+      Alert.alert("日付エラー", "終了日が開始日より前です。終了日を再設定してください。");
+      return;
+    }
+
     if (!noCategoryChecked && !selectedOption) {
       Alert.alert("Error", "カテゴリを選択してください");
       return;
@@ -163,130 +171,151 @@ const AddTaskScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <View style={styles.pickerContainer}>
-          <View style={styles.pickerHeader}>
-            <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
-            <TouchableOpacity 
-              style={styles.addCategoryButton}
-              onPress={() => setShowAddCategoryModal(true)}
-            >
-              <Text style={styles.addCategoryButtonText}>+ 追加</Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.checkboxRow}
-            onPress={() => setNoCategoryChecked((prev) => !prev)}
-            activeOpacity={0.8}
-          >
-            <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
-              {noCategoryChecked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+      <Modal
+        visible={showAddCategoryModal}
+        transparent={true}
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>新しいカテゴリを追加</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={newCategoryName}
+              onChangeText={setNewCategoryName}
+              placeholder="カテゴリ名を入力"
+              returnKeyType="done"
+              onSubmitEditing={() => {
+                Keyboard.dismiss();
+                handleAddCategory();
+              }}
+            />
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => {
+                  setNewCategoryName("");
+                  setShowAddCategoryModal(false);
+                }}
+              >
+                <Text style={styles.modalButtonText}>キャンセル</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+                onPress={handleAddCategory}
+              >
+                <Text style={styles.modalButtonText}>追加</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.checkboxLabel}>カテゴリ指定しない</Text>
-          </TouchableOpacity>
-
-          <Picker
-            selectedValue={selectedOption}
-            onValueChange={(itemValue) => setSelectedOption(itemValue)}
-            enabled={!noCategoryChecked}
-            style={[styles.picker, noCategoryChecked && styles.pickerDisabled]}
-            itemStyle={ styles.pickerItem  }
-          >
-            {categories.map((category) => (
-              <Picker.Item 
-                key={category.id} 
-                label={category.name} 
-                value={category.id.toString()} 
-              />
-            ))}
-          </Picker>
+          </View>
         </View>
+      </Modal>
 
-        {/* カテゴリ追加モーダル */}
-        <Modal
-          visible={showAddCategoryModal}
-          transparent={true}
-          animationType="slide"
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <KeyboardAvoidingView
+          style={styles.content}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>新しいカテゴリを追加</Text>
-              <TextInput
-                style={styles.modalInput}
-                value={newCategoryName}
-                onChangeText={setNewCategoryName}
-                placeholder="カテゴリ名を入力"
-              />
-              <View style={styles.modalButtons}>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonCancel]}
-                  onPress={() => {
-                    setNewCategoryName("");
-                    setShowAddCategoryModal(false);
-                  }}
-                >
-                  <Text style={styles.modalButtonText}>キャンセル</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalButton, styles.modalButtonSubmit]}
-                  onPress={handleAddCategory}
-                >
-                  <Text style={styles.modalButtonText}>追加</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-        
-        <View style={styles.formContainer}>
-          <TextInput
-            style={styles.textarea}
-            value={text}
-            onChangeText={setText}
-            placeholder="Enter text here"
-            multiline
-          />
-        {datePickerVisible && (
-          <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
-            <View style={styles.dateColumn}>
-              <Text style={styles.dateLabel}>開始日</Text>
-              <DateTimePicker
-                value={startDate}
-                mode="date"
-                is24Hour={true}
-                display="default"
-                onChange={onDateChange}
-                locale="ja-JP"
-                style={styles.datePicker}
-              />
-            </View>
-            <View style={styles.dateColumn}>
-              <Text style={styles.dateLabel}>終了日</Text>
-              <DateTimePicker
-                value={endDate}
-                mode="date"
-                is24Hour={true}
-                display="default"
-                onChange={onEndDateChange}
-                locale="ja-JP"
-                style={styles.datePicker}
-              />
-            </View>
-          </View>
-        )}
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.buttonText}>Submit</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.listContainer}>
-          <Text style={styles.listTitle}>
-            Saved Items ({items.reduce((sum, section) => sum + section.data.length, 0)}):
-          </Text>
           <SectionList
+            style={styles.content}
+            contentContainerStyle={styles.contentContainer}
             sections={items}
             keyExtractor={(item) => item.id.toString()}
+            stickySectionHeadersEnabled={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={Platform.OS === "ios" ? "interactive" : "on-drag"}
+            ListHeaderComponent={
+              <>
+            <View style={styles.pickerContainer}>
+              <View style={styles.pickerHeader}>
+                <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
+                <TouchableOpacity
+                  style={styles.addCategoryButton}
+                  onPress={() => setShowAddCategoryModal(true)}
+                >
+                  <Text style={styles.addCategoryButtonText}>+ 追加</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setNoCategoryChecked((prev) => !prev)}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
+                  {noCategoryChecked ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.checkboxLabel}>カテゴリ指定しない</Text>
+              </TouchableOpacity>
+
+              <Picker
+                selectedValue={selectedOption}
+                onValueChange={(itemValue) => setSelectedOption(itemValue)}
+                enabled={!noCategoryChecked}
+                style={[styles.picker, noCategoryChecked && styles.pickerDisabled]}
+                itemStyle={styles.pickerItem}
+              >
+                {categories.map((category) => (
+                  <Picker.Item
+                    key={category.id}
+                    label={category.name}
+                    value={category.id.toString()}
+                  />
+                ))}
+              </Picker>
+            </View>
+
+                <View style={styles.formContainer}>
+                  <TextInput
+                    style={styles.textarea}
+                    value={text}
+                    onChangeText={setText}
+                    placeholder="Enter text here"
+                    multiline
+                    returnKeyType="done"
+                    blurOnSubmit={true}
+                    onSubmitEditing={Keyboard.dismiss}
+                  />
+              {datePickerVisible && (
+                <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
+                  <View style={styles.dateColumn}>
+                    <Text style={styles.dateLabel}>開始日</Text>
+                    <DateTimePicker
+                      value={startDate}
+                      mode="date"
+                      is24Hour={true}
+                      display="default"
+                      onChange={onDateChange}
+                      locale="ja-JP"
+                      style={styles.datePicker}
+                    />
+                  </View>
+                  <View style={styles.dateColumn}>
+                    <Text style={styles.dateLabel}>終了日</Text>
+                    <DateTimePicker
+                      value={endDate}
+                      mode="date"
+                      is24Hour={true}
+                      display="default"
+                      onChange={onEndDateChange}
+                      locale="ja-JP"
+                      style={styles.datePicker}
+                    />
+                  </View>
+                </View>
+              )}
+              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+                <Text style={styles.buttonText}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+
+                <View style={styles.listContainer}>
+                  <Text style={styles.listTitle}>
+                    Saved Items ({items.reduce((sum, section) => sum + section.data.length, 0)}):
+                  </Text>
+                </View>
+              </>
+            }
             renderSectionHeader={({ section: { title } }) => (
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionHeaderText}>{title}</Text>
@@ -306,9 +335,10 @@ const AddTaskScreen = () => {
                 </TouchableOpacity>
               </View>
             )}
+            ListEmptyComponent={<Text style={styles.emptyListText}>保存済みの予定はまだありません。</Text>}
           />
-        </View>
-      </View>
+        </KeyboardAvoidingView>
+      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 };
@@ -320,8 +350,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  contentContainer: {
     padding: 20,
     paddingTop: 8,
+    paddingBottom: 32,
   },
   title: {
     fontSize: 28,
@@ -471,7 +504,6 @@ const styles = StyleSheet.create({
   },
   listContainer: {
     marginTop: 20,
-    flex: 1,
   },
   listTitle: {
     fontSize: 18,
@@ -569,6 +601,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     color: '#fff',
+  },
+  emptyListText: {
+    fontSize: 14,
+    color: '#666',
+    paddingVertical: 12,
   },
 });
 

@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "name": "mobile",
+    "slug": "mobile",
+    "version": "0.1.0",
+    "newArchEnabled": true,
+    "plugins": [
+      "@react-native-community/datetimepicker",
+      "expo-sqlite"
+    ]
+  }
+}

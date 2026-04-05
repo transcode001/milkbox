@@ -1,512 +1,408 @@
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
-  Dimensions,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Gesture,
-  GestureDetector,
-  GestureHandlerRootView,
-} from "react-native-gesture-handler";
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-} from "react-native-reanimated";
+import { useFocusEffect } from "@react-navigation/native";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
-// Zoom levels: 0 = Day, 1 = Week, 2 = Month, 3 = Year
-type ZoomLevel = 0 | 1 | 2 | 3;
-const ZOOM_LABELS = ["Day", "Week", "Month", "Year"] as const;
+function startOfDay(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
-// Hours to display
-const HOURS = Array.from({ length: 24 }, (_, i) => i);
-
-// Row height per zoom level (in pixels)
-const ROW_HEIGHTS: Record<ZoomLevel, number> = {
-  0: 80, // Day: 1 row = 1 day, tall
-  1: 60, // Week: 7 rows
-  2: 40, // Month: ~30 rows
-  3: 20, // Year: ~365 rows
-};
-
-// Time column width per zoom level
-const TIME_COL_WIDTHS: Record<ZoomLevel, number> = {
-  0: (SCREEN_WIDTH - 60) / 24, // Day: show all 24 hours
-  1: (SCREEN_WIDTH - 60) / 24, // Week: show all 24 hours
-  2: (SCREEN_WIDTH - 60) / 6, // Month: show 6 time blocks (4h each)
-  3: (SCREEN_WIDTH - 60) / 4, // Year: show 4 time blocks (6h each)
-};
-
-const DATE_COL_WIDTH = 60;
+function createDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 
 function toDateKey(value: string): string {
-  return value.includes("T") ? value.split("T")[0] : value;
-}
-
-function parseHour(dateStr: string): number {
-  if (dateStr.includes("T")) {
-    const timePart = dateStr.split("T")[1];
-    if (timePart) {
-      const hour = parseInt(timePart.split(":")[0], 10);
-      return isNaN(hour) ? 0 : hour;
-    }
+  if (value.includes("T")) {
+    return value.split("T")[0];
   }
-  return 0;
+  return value;
 }
 
-function getDatesForZoom(baseDate: Date, zoom: ZoomLevel): Date[] {
-  const dates: Date[] = [];
-  const year = baseDate.getFullYear();
-  const month = baseDate.getMonth();
-  const day = baseDate.getDate();
+function getCalendarStart(date: Date): Date {
+  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  return new Date(
+    firstDayOfMonth.getFullYear(),
+    firstDayOfMonth.getMonth(),
+    firstDayOfMonth.getDate() - firstDayOfMonth.getDay(),
+  );
+}
 
-  switch (zoom) {
-    case 0: // Day: just 1 day
-      dates.push(new Date(year, month, day));
-      break;
-    case 1: // Week: 7 days
-      const weekStart = new Date(year, month, day - baseDate.getDay());
-      for (let i = 0; i < 7; i++) {
-        dates.push(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + i));
-      }
-      break;
-    case 2: // Month: all days in month
-      const daysInMonth = new Date(year, month + 1, 0).getDate();
-      for (let i = 1; i <= daysInMonth; i++) {
-        dates.push(new Date(year, month, i));
-      }
-      break;
-    case 3: // Year: all days in year
-      const startOfYear = new Date(year, 0, 1);
-      const endOfYear = new Date(year, 11, 31);
-      const totalDays = Math.ceil((endOfYear.getTime() - startOfYear.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-      for (let i = 0; i < totalDays; i++) {
-        dates.push(new Date(year, 0, 1 + i));
-      }
-      break;
+function buildMonthGrid(date: Date): Date[][] {
+  const startDate = getCalendarStart(date);
+  return Array.from({ length: 6 }, (_, weekIndex) =>
+    Array.from({ length: 7 }, (_, dayIndex) => {
+      const offset = weekIndex * 7 + dayIndex;
+      return new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate() + offset,
+      );
+    }),
+  );
+}
+
+function formatMonthLabel(date: Date): string {
+  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
+}
+
+function formatScheduleTime(item: SavedItem): string {
+  const source = item.startDate ?? item.date;
+  if (!source.includes("T")) {
+    return "終日";
   }
-  return dates;
-}
 
-function formatDateLabel(date: Date, zoom: ZoomLevel): string {
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-
-  switch (zoom) {
-    case 0: // Day
-      return `${month}/${day} (${weekdays[date.getDay()]})`;
-    case 1: // Week
-      return `${month}/${day}`;
-    case 2: // Month
-      return `${day}`;
-    case 3: // Year
-      if (day === 1) {
-        return `${month}/${day}`;
-      }
-      return day % 7 === 1 ? `${day}` : "";
-  }
-}
-
-function getTimeLabels(zoom: ZoomLevel): string[] {
-  switch (zoom) {
-    case 0:
-    case 1:
-      return HOURS.map((h) => `${h}:00`);
-    case 2:
-      return ["0-4", "4-8", "8-12", "12-16", "16-20", "20-24"];
-    case 3:
-      return ["Morning", "Noon", "Evening", "Night"];
-  }
-}
-
-function getTimeBlockIndex(hour: number, zoom: ZoomLevel): number {
-  switch (zoom) {
-    case 0:
-    case 1:
-      return hour;
-    case 2:
-      return Math.floor(hour / 4);
-    case 3:
-      return Math.floor(hour / 6);
-  }
-}
-
-function dateToKey(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return new Date(source).toLocaleTimeString("ja-JP", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 const CalendarScreen = () => {
-  const [baseDate, setBaseDate] = useState(() => new Date());
-  const [zoomLevel, setZoomLevel] = useState<ZoomLevel>(1); // Start at Week view
+  const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
+  const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [items, setItems] = useState<SavedItem[]>([]);
   const [dbManager] = useState(() => new DatabaseManager());
 
-  const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
-
-  useEffect(() => {
-    const initialize = async () => {
-      await dbManager.initialize();
-      const result = await dbManager.itemRepository.findAllWithCategory();
-      setItems(result);
-    };
-    initialize();
+  const loadItems = useCallback(async () => {
+    await dbManager.initialize();
+    const result = await dbManager.itemRepository.findAllWithCategory();
+    setItems(result);
   }, [dbManager]);
 
-  const handleZoomChange = useCallback((newZoom: ZoomLevel) => {
-    setZoomLevel(newZoom);
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      void loadItems();
+    }, [loadItems]),
+  );
 
-  const pinchGesture = Gesture.Pinch()
-    .onUpdate((event) => {
-      scale.value = savedScale.value * event.scale;
-    })
-    .onEnd(() => {
-      const currentScale = scale.value;
-      let newZoom = zoomLevel;
-
-      // Zoom out (pinch in) - go to higher zoom level (more days)
-      if (currentScale < 0.7 && zoomLevel < 3) {
-        newZoom = (zoomLevel + 1) as ZoomLevel;
-      }
-      // Zoom in (pinch out) - go to lower zoom level (fewer days)
-      else if (currentScale > 1.5 && zoomLevel > 0) {
-        newZoom = (zoomLevel - 1) as ZoomLevel;
-      }
-
-      if (newZoom !== zoomLevel) {
-        runOnJS(handleZoomChange)(newZoom);
-      }
-
-      scale.value = withSpring(1);
-      savedScale.value = 1;
-    });
-
-  const dates = useMemo(() => getDatesForZoom(baseDate, zoomLevel), [baseDate, zoomLevel]);
-  const timeLabels = useMemo(() => getTimeLabels(zoomLevel), [zoomLevel]);
-  const rowHeight = ROW_HEIGHTS[zoomLevel];
-  const colWidth = TIME_COL_WIDTHS[zoomLevel];
-
-  // Group items by date
   const itemsByDate = useMemo(() => {
-    const map = new Map<string, SavedItem[]>();
+    const grouped = new Map<string, SavedItem[]>();
+
     for (const item of items) {
-      const key = toDateKey(item.startDate ?? item.date);
-      if (!map.has(key)) {
-        map.set(key, []);
-      }
-      map.get(key)!.push(item);
+      const dateKey = toDateKey(item.startDate ?? item.date);
+      const current = grouped.get(dateKey) ?? [];
+      current.push(item);
+      grouped.set(dateKey, current);
     }
-    return map;
+
+    return grouped;
   }, [items]);
 
-  const animatedContainerStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const monthGrid = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
+  const todayKey = createDateKey(new Date());
+  const selectedDateKey = createDateKey(selectedDate);
+  const selectedItems = useMemo(() => {
+    const currentItems = itemsByDate.get(selectedDateKey) ?? [];
+    return [...currentItems].sort((left, right) => {
+      const leftTime = new Date(left.startDate ?? left.date).getTime();
+      const rightTime = new Date(right.startDate ?? right.date).getTime();
+      return leftTime - rightTime;
+    });
+  }, [itemsByDate, selectedDateKey]);
 
-  const headerLabel = useMemo(() => {
-    const year = baseDate.getFullYear();
-    const month = baseDate.getMonth() + 1;
-
-    switch (zoomLevel) {
-      case 0:
-        return `${year}/${month}/${baseDate.getDate()}`;
-      case 1:
-        return `${year}/${month} Week`;
-      case 2:
-        return `${year}/${month}`;
-      case 3:
-        return `${year}`;
-    }
-  }, [baseDate, zoomLevel]);
+  const moveMonth = useCallback((diff: number) => {
+    setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
+  }, []);
 
   return (
-    <GestureHandlerRootView style={styles.flex}>
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>{headerLabel}</Text>
-          <View style={styles.zoomIndicator}>
-            <Text style={styles.zoomText}>{ZOOM_LABELS[zoomLevel]}</Text>
-          </View>
+          <Pressable style={styles.monthButton} onPress={() => moveMonth(-1)}>
+            <Text style={styles.monthButtonText}>前月</Text>
+          </Pressable>
+          <Text style={styles.headerTitle}>{formatMonthLabel(visibleMonth)}</Text>
+          <Pressable style={styles.monthButton} onPress={() => moveMonth(1)}>
+            <Text style={styles.monthButtonText}>次月</Text>
+          </Pressable>
         </View>
 
-        <Text style={styles.hint}>Pinch to zoom: Day - Week - Month - Year</Text>
+        <View style={styles.weekRow}>
+          {WEEKDAY_LABELS.map((label) => (
+            <View key={label} style={styles.weekCell}>
+              <Text style={styles.weekLabel}>{label}</Text>
+            </View>
+          ))}
+        </View>
 
-        <GestureDetector gesture={pinchGesture}>
-          <Animated.View style={[styles.flex, animatedContainerStyle]}>
-            <ScrollView style={styles.flex} showsVerticalScrollIndicator={false}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.scrollContent}
-              >
-                <View>
-                  {/* Time header row */}
-                  <View style={styles.timeHeaderRow}>
-                    <View style={[styles.cornerCell, { width: DATE_COL_WIDTH }]}>
-                      <Text style={styles.cornerText}>Date</Text>
-                    </View>
-                    {timeLabels.map((label, idx) => (
-                      <View
-                        key={`time-${idx}`}
-                        style={[styles.timeHeaderCell, { width: colWidth }]}
-                      >
-                        <Text style={styles.timeHeaderText}>{label}</Text>
-                      </View>
-                    ))}
-                  </View>
+        <View style={styles.calendarBody}>
+          {monthGrid.map((week, weekIndex) => (
+            <View key={`week-${weekIndex}`} style={styles.weekRow}>
+              {week.map((date) => {
+                const dateKey = createDateKey(date);
+                const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
+                const isSelected = dateKey === selectedDateKey;
+                const isToday = dateKey === todayKey;
+                const dayItems = itemsByDate.get(dateKey) ?? [];
 
-                  {/* Date rows */}
-                  {dates.map((date) => {
-                    const dateKey = dateToKey(date);
-                    const dayItems = itemsByDate.get(dateKey) ?? [];
-                    const label = formatDateLabel(date, zoomLevel);
-                    const isToday = dateKey === dateToKey(new Date());
-                    const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-
-                    return (
-                      <View
-                        key={dateKey}
-                        style={[
-                          styles.dateRow,
-                          { height: rowHeight },
-                          isWeekend && styles.weekendRow,
-                        ]}
-                      >
-                        {/* Date label */}
-                        <View
-                          style={[
-                            styles.dateLabelCell,
-                            { width: DATE_COL_WIDTH },
-                            isToday && styles.todayLabel,
-                          ]}
-                        >
-                          <Text
-                            style={[
-                              styles.dateLabelText,
-                              isToday && styles.todayLabelText,
-                            ]}
-                            numberOfLines={1}
-                          >
-                            {label}
+                return (
+                  <Pressable
+                    key={dateKey}
+                    style={[
+                      styles.dayCell,
+                      isSelected && styles.dayCellSelected,
+                      !isCurrentMonth && styles.dayCellMuted,
+                    ]}
+                    onPress={() => setSelectedDate(startOfDay(date))}
+                  >
+                    <Text
+                      style={[
+                        styles.dayNumber,
+                        !isCurrentMonth && styles.dayNumberMuted,
+                        isSelected && styles.dayNumberSelected,
+                        isToday && !isSelected && styles.dayNumberToday,
+                      ]}
+                    >
+                      {date.getDate()}
+                    </Text>
+                    <View style={styles.dayMeta}>
+                      {dayItems.length > 0 ? (
+                        <>
+                          <View style={[styles.eventDot, isSelected && styles.eventDotSelected]} />
+                          <Text style={[styles.eventCount, isSelected && styles.eventCountSelected]}>
+                            {dayItems.length}件
                           </Text>
-                        </View>
+                        </>
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+        </View>
 
-                        {/* Time slots */}
-                        {timeLabels.map((_, idx) => {
-                          // Find items in this time block
-                          const blockItems = dayItems.filter((item) => {
-                            const hour = parseHour(item.startDate ?? item.date);
-                            return getTimeBlockIndex(hour, zoomLevel) === idx;
-                          });
+        <View style={styles.scheduleHeader}>
+          <Text style={styles.scheduleTitle}>{selectedDateKey} の予定</Text>
+          <Pressable
+            style={styles.todayButton}
+            onPress={() => {
+              const today = startOfDay(new Date());
+              setVisibleMonth(today);
+              setSelectedDate(today);
+            }}
+          >
+            <Text style={styles.todayButtonText}>今日へ</Text>
+          </Pressable>
+        </View>
 
-                          return (
-                            <View
-                              key={`${dateKey}-${idx}`}
-                              style={[
-                                styles.timeSlot,
-                                { width: colWidth, height: rowHeight },
-                              ]}
-                            >
-                              {blockItems.slice(0, zoomLevel <= 1 ? 3 : 1).map((item, i) => (
-                                <View
-                                  key={item.id}
-                                  style={[
-                                    styles.itemBlock,
-                                    {
-                                      backgroundColor: getItemColor(item.categoryName),
-                                      top: i * (zoomLevel <= 1 ? 18 : 10),
-                                    },
-                                  ]}
-                                >
-                                  <Text
-                                    style={styles.itemText}
-                                    numberOfLines={1}
-                                  >
-                                    {item.text}
-                                  </Text>
-                                </View>
-                              ))}
-                              {blockItems.length > (zoomLevel <= 1 ? 3 : 1) && (
-                                <View style={styles.moreIndicator}>
-                                  <Text style={styles.moreText}>
-                                    +{blockItems.length - (zoomLevel <= 1 ? 3 : 1)}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-                          );
-                        })}
-                      </View>
-                    );
-                  })}
+        <View style={styles.scheduleList}>
+          {selectedItems.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyTitle}>予定はありません</Text>
+              <Text style={styles.emptyText}>AddTask で登録した予定がここに表示されます。</Text>
+            </View>
+          ) : (
+            selectedItems.map((item) => (
+              <View key={item.id} style={styles.scheduleCard}>
+                <View style={styles.scheduleRow}>
+                  <Text style={styles.scheduleTime}>{formatScheduleTime(item)}</Text>
+                  {item.categoryName ? (
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryBadgeText}>{item.categoryName}</Text>
+                    </View>
+                  ) : null}
                 </View>
-              </ScrollView>
-            </ScrollView>
-          </Animated.View>
-        </GestureDetector>
-      </SafeAreaView>
-    </GestureHandlerRootView>
+                <Text style={styles.scheduleText}>{item.text}</Text>
+              </View>
+            ))
+          )}
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
-function getItemColor(category: string | null | undefined): string {
-  const colors: Record<string, string> = {
-    Work: "#3b82f6",
-    Personal: "#10b981",
-    Shopping: "#f59e0b",
-    Health: "#ef4444",
-  };
-  return colors[category ?? ""] ?? "#6b7280";
-}
-
 const styles = StyleSheet.create({
-  flex: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-    backgroundColor: "#f8fafc",
+    backgroundColor: "#f7f8fc",
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 32,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    marginBottom: 16,
   },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: "700",
-    color: "#0f172a",
+    color: "#1f2937",
   },
-  zoomIndicator: {
-    backgroundColor: "#3b82f6",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  zoomText: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  hint: {
-    textAlign: "center",
-    color: "#64748b",
-    fontSize: 12,
+  monthButton: {
     paddingVertical: 8,
-    backgroundColor: "#f1f5f9",
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  timeHeaderRow: {
-    flexDirection: "row",
+    paddingHorizontal: 12,
     backgroundColor: "#ffffff",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
+    borderRadius: 10,
   },
-  cornerCell: {
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#f1f5f9",
-    borderRightWidth: 1,
-    borderRightColor: "#e2e8f0",
-  },
-  cornerText: {
-    fontSize: 12,
+  monthButtonText: {
+    color: "#2563eb",
+    fontSize: 14,
     fontWeight: "600",
-    color: "#64748b",
   },
-  timeHeaderCell: {
-    height: 40,
+  calendarBody: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  weekRow: {
+    flexDirection: "row",
+  },
+  weekCell: {
+    flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    borderRightWidth: 1,
-    borderRightColor: "#e2e8f0",
+    paddingVertical: 10,
   },
-  timeHeaderText: {
+  weekLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6b7280",
+  },
+  dayCell: {
+    flex: 1,
+    minHeight: 72,
+    margin: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 6,
+    borderRadius: 12,
+    backgroundColor: "#f9fafb",
+  },
+  dayCellSelected: {
+    backgroundColor: "#2563eb",
+  },
+  dayCellMuted: {
+    opacity: 0.45,
+  },
+  dayNumber: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  dayNumberMuted: {
+    color: "#9ca3af",
+  },
+  dayNumberSelected: {
+    color: "#ffffff",
+  },
+  dayNumberToday: {
+    color: "#2563eb",
+  },
+  dayMeta: {
+    marginTop: 8,
+    alignItems: "flex-start",
+  },
+  eventDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 999,
+    backgroundColor: "#2563eb",
+    marginBottom: 4,
+  },
+  eventDotSelected: {
+    backgroundColor: "#ffffff",
+  },
+  eventCount: {
     fontSize: 11,
-    fontWeight: "500",
-    color: "#64748b",
+    color: "#2563eb",
+    fontWeight: "600",
   },
-  dateRow: {
+  eventCountSelected: {
+    color: "#ffffff",
+  },
+  scheduleHeader: {
+    marginTop: 20,
+    marginBottom: 12,
     flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    backgroundColor: "#ffffff",
-  },
-  weekendRow: {
-    backgroundColor: "#fef3c7",
-  },
-  dateLabelCell: {
-    justifyContent: "center",
     alignItems: "center",
-    borderRightWidth: 1,
-    borderRightColor: "#e2e8f0",
-    backgroundColor: "#f8fafc",
-    paddingHorizontal: 4,
+    justifyContent: "space-between",
   },
-  dateLabelText: {
+  scheduleTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
+  },
+  todayButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#e5edff",
+  },
+  todayButtonText: {
+    color: "#1d4ed8",
+    fontWeight: "600",
+  },
+  scheduleList: {
+    paddingBottom: 8,
+  },
+  emptyState: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 20,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 6,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: "#6b7280",
+    lineHeight: 20,
+  },
+  scheduleCard: {
+    backgroundColor: "#ffffff",
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  scheduleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  scheduleTime: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2563eb",
+  },
+  categoryBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "#eef2ff",
+  },
+  categoryBadgeText: {
     fontSize: 12,
+    color: "#4338ca",
     fontWeight: "600",
-    color: "#334155",
   },
-  todayLabel: {
-    backgroundColor: "#3b82f6",
-  },
-  todayLabelText: {
-    color: "#ffffff",
-  },
-  timeSlot: {
-    borderRightWidth: 1,
-    borderRightColor: "#f1f5f9",
-    padding: 2,
-    position: "relative",
-  },
-  itemBlock: {
-    position: "absolute",
-    left: 2,
-    right: 2,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    borderRadius: 4,
-    minHeight: 16,
-  },
-  itemText: {
-    fontSize: 10,
-    color: "#ffffff",
-    fontWeight: "500",
-  },
-  moreIndicator: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    backgroundColor: "#94a3b8",
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-  },
-  moreText: {
-    fontSize: 9,
-    color: "#ffffff",
-    fontWeight: "600",
+  scheduleText: {
+    fontSize: 15,
+    color: "#111827",
+    lineHeight: 22,
   },
 });
 
