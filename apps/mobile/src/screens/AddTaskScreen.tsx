@@ -110,6 +110,14 @@ const AddTaskScreen = () => {
       return;
     }
 
+    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+    if (endDateOnly < startDateOnly) {
+      Alert.alert("日付エラー", "終了日が開始日より前です。終了日を再設定してください。");
+      return;
+    }
+
     if (!noCategoryChecked && !selectedOption) {
       Alert.alert("Error", "カテゴリを選択してください");
       return;
