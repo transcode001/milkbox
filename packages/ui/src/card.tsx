@@ -12,5 +12,3 @@ export function Card({ className, children }: CardProps): JSX.Element {
     </div>
   );
 }
-  );
-}
