@@ -7,6 +7,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
+import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 
 interface CategorySection {
   title: string;
@@ -110,10 +111,7 @@ const AddTaskScreen = () => {
       return;
     }
 
-    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-
-    if (endDateOnly < startDateOnly) {
+    if (isEndDateBeforeStartDate(startDate, endDate)) {
       Alert.alert("日付エラー", "終了日が開始日より前です。終了日を再設定してください。");
       return;
     }
