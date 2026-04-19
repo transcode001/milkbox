@@ -76,7 +76,7 @@ const AddTaskScreen = () => {
       
       // カテゴリ別にグループ化
       const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || 'Unknown';
+        const categoryName = item.categoryName || '期間指定なし';
         const existing = acc.find(section => section.title === categoryName);
         
         if (existing) {

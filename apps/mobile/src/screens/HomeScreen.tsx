@@ -46,7 +46,7 @@ const HomeScreen = ({ navigation }: Props) => {
       }
       const result = await dbManager.itemRepository.findAllWithCategory();
       const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || "Unknown";
+        const categoryName = item.categoryName || "期間指定なし";
         const existing = acc.find((section) => section.title === categoryName);
 
         if (existing) {
@@ -84,6 +84,9 @@ const HomeScreen = ({ navigation }: Props) => {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Items by Category</Text>
+        <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
+          <Text style={styles.addTaskButtonText}>Add Task</Text>
+        </TouchableOpacity>
       </View>
 
       {loading ? (
@@ -135,6 +138,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingTop: 12,
     paddingBottom: 8,
@@ -145,6 +151,17 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 10,
+  },
+  addTaskButton: {
+    backgroundColor: "#007AFF",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  addTaskButtonText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
   },
   listContent: {
     paddingHorizontal: 20,
