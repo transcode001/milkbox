@@ -130,4 +130,9 @@ export class SQLiteItemRepository implements IItemRepository {
     if (!this.db) throw new Error('Database not initialized');
     await this.db.runAsync('DELETE FROM items WHERE categoryId = ?', [categoryId]);
   }
+
+  async clearCategoryByCategoryId(categoryId: number): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync('UPDATE items SET categoryId = NULL WHERE categoryId = ?', [categoryId]);
+  }
 }

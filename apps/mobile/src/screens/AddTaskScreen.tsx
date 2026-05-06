@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -9,13 +10,16 @@ import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
+import type { RootTabParamList } from "../navigation/types";
 
 interface CategorySection {
   title: string;
   data: SavedItem[];
 }
 
-const AddTaskScreen = () => {
+type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
+
+const AddTaskScreen = ({ navigation }: Props) => {
   const { width } = useWindowDimensions();
   const isNarrowScreen = width < 360;
   const [text, setText] = useState("");
@@ -131,8 +135,17 @@ const AddTaskScreen = () => {
         endDate: endDate.toISOString(),
       });
       setText("");
-      Alert.alert("Success", "Data saved!");
       await loadItems();
+      Alert.alert("登録完了", "続けて予定を登録しますか？", [
+        {
+          text: "続けて登録する",
+          style: "cancel",
+        },
+        {
+          text: "ホームへ戻る",
+          onPress: () => navigation.navigate("Home"),
+        },
+      ]);
     } catch (error) {
       Alert.alert("Error", "Failed to save data");
     }
@@ -162,6 +175,64 @@ const AddTaskScreen = () => {
     } catch (error) {
       Alert.alert("Error", "Failed to add category");
     }
+  };
+
+  const handleDeleteCategory = async (mode: "delete" | "uncategorize") => {
+    if (!selectedOption) {
+      Alert.alert("Error", "削除するカテゴリを選択してください");
+      return;
+    }
+
+    const categoryId = Number(selectedOption);
+
+    try {
+      if (mode === "delete") {
+        await dbManager.itemRepository.deleteByCategoryId(categoryId);
+      } else {
+        await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
+      }
+
+      await dbManager.categoryRepository.delete(categoryId);
+      setSelectedOption("");
+      await Promise.all([loadCategories(), loadItems()]);
+      Alert.alert("Success", "カテゴリを削除しました");
+    } catch (error) {
+      Alert.alert("Error", "カテゴリの削除に失敗しました");
+    }
+  };
+
+  const showDeleteCategoryDialog = () => {
+    if (!selectedOption) {
+      Alert.alert("Error", "削除するカテゴリを選択してください");
+      return;
+    }
+
+    const currentCategory = categories.find((category) => category.id.toString() === selectedOption);
+    const categoryName = currentCategory?.name ?? "このカテゴリ";
+
+    Alert.alert(
+      "カテゴリを削除",
+      `「${categoryName}」を削除します。\n登録済みの内容をどうしますか？`,
+      [
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: () => {
+            void handleDeleteCategory("delete");
+          },
+        },
+        {
+          text: "未分類",
+          onPress: () => {
+            void handleDeleteCategory("uncategorize");
+          },
+        },
+        {
+          text: "キャンセル",
+          style: "cancel",
+        },
+      ],
+    );
   };
 
   const formatDate = (date: Date): string => {
@@ -228,12 +299,24 @@ const AddTaskScreen = () => {
             <View style={styles.pickerContainer}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
-                <TouchableOpacity
-                  style={styles.addCategoryButton}
-                  onPress={() => setShowAddCategoryModal(true)}
-                >
-                  <Text style={styles.addCategoryButtonText}>+ 追加</Text>
-                </TouchableOpacity>
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity
+                    style={styles.addCategoryButton}
+                    onPress={() => setShowAddCategoryModal(true)}
+                  >
+                    <Text style={styles.addCategoryButtonText}>+ 追加</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.removeCategoryButton,
+                      !selectedOption && styles.removeCategoryButtonDisabled,
+                    ]}
+                    onPress={showDeleteCategoryDialog}
+                    disabled={!selectedOption}
+                  >
+                    <Text style={styles.removeCategoryButtonText}>削除</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <TouchableOpacity

@@ -70,6 +70,10 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 8,
   },
+  pickerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
   pickerLabel: {
     fontSize: 14,
     fontWeight: "600",
@@ -81,6 +85,20 @@ export const styles = StyleSheet.create({
     borderRadius: 4,
   },
   addCategoryButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  removeCategoryButton: {
+    backgroundColor: "#dc3545",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+  },
+  removeCategoryButtonDisabled: {
+    backgroundColor: "#e9a5ad",
+  },
+  removeCategoryButtonText: {
     color: "#fff",
     fontSize: 14,
     fontWeight: "600",
