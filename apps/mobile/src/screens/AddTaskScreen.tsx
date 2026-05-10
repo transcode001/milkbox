@@ -30,14 +30,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [datePickerVisible, setDatePickerVisible] = useState<boolean>(Platform.OS === 'ios');
-  const [timePickerVisible, setTimePickerVisible] = useState<boolean>(Platform.OS === 'ios');
-  const timeOptions: Intl.DateTimeFormatOptions = {
-    hour: '2-digit',
-    minute: '2-digit',
-  };
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [activeDateField, setActiveDateField] = useState<"start" | "end" | null>(null);
 
   useEffect(() => {
     initDatabase();
@@ -99,15 +94,30 @@ const AddTaskScreen = ({ navigation }: Props) => {
   };
 
   const onDateChange = (event: any, selectedDate: Date | undefined) => {
-    const currentDate = selectedDate || startDate;
-    setDatePickerVisible(Platform.OS === 'ios');
-    setStartDate(currentDate);
-  };
+    if (!activeDateField) {
+      return;
+    }
 
-  const onEndDateChange = (event: any, selectedDate: Date | undefined) => {
-    const currentDate = selectedDate || endDate;
-    setDatePickerVisible(Platform.OS === 'ios');
-    setEndDate(currentDate);
+    if (event?.type === "dismissed") {
+      if (Platform.OS === "android") {
+        setActiveDateField(null);
+      }
+      return;
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    if (activeDateField === "start") {
+      setStartDate(selectedDate);
+    } else {
+      setEndDate(selectedDate);
+    }
+
+    if (Platform.OS === "android") {
+      setActiveDateField(null);
+    }
   };
   
   const handleSubmit = async () => {
@@ -126,15 +136,20 @@ const AddTaskScreen = ({ navigation }: Props) => {
       return;
     }
 
+    const fallbackDate = startDate ?? endDate ?? new Date();
+
     try {
       await dbManager.itemRepository.create({
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         text,
-        date: startDate.toISOString(),
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        date: fallbackDate.toISOString(),
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString(),
       });
       setText("");
+      setStartDate(null);
+      setEndDate(null);
+      setActiveDateField(null);
       await loadItems();
       Alert.alert("登録完了", "続けて予定を登録しますか？", [
         {
@@ -237,6 +252,23 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
   const formatDate = (date: Date): string => {
     return date.toISOString().split("T")[0];
+  };
+
+  const openDatePicker = (field: "start" | "end") => {
+    if (field === "start" && !startDate) {
+      setStartDate(new Date());
+    } else if (field === "end" && !endDate) {
+      setEndDate(new Date());
+    }
+    setActiveDateField(field);
+  };
+
+  const clearDate = (field: "start" | "end") => {
+    if (field === "start") {
+      setStartDate(null);
+      return;
+    }
+    setEndDate(null);
   };
 
   return (
@@ -358,32 +390,69 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     blurOnSubmit={true}
                     onSubmitEditing={Keyboard.dismiss}
                   />
-              {datePickerVisible && (
-                <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
+              <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
                   <View style={styles.dateColumn}>
                     <Text style={styles.dateLabel}>開始日</Text>
-                    <DateTimePicker
-                      value={startDate}
-                      mode="date"
-                      is24Hour={true}
-                      display="default"
-                      onChange={onDateChange}
-                      locale="ja-JP"
-                      style={styles.datePicker}
-                    />
+                    <View style={styles.dateControlRow}>
+                      <TouchableOpacity
+                        style={styles.dateSelectorButton}
+                        onPress={() => openDatePicker("start")}
+                      >
+                        <Text style={styles.dateSelectorButtonText}>
+                          {startDate ? formatDate(startDate) : "設定しない"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.dateClearButton}
+                        onPress={() => clearDate("start")}
+                        disabled={!startDate}
+                      >
+                        <Text style={styles.dateClearButtonText}>クリア</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.dateColumn}>
                     <Text style={styles.dateLabel}>終了日</Text>
-                    <DateTimePicker
-                      value={endDate}
-                      mode="date"
-                      is24Hour={true}
-                      display="default"
-                      onChange={onEndDateChange}
-                      locale="ja-JP"
-                      style={styles.datePicker}
-                    />
+                    <View style={styles.dateControlRow}>
+                      <TouchableOpacity
+                        style={styles.dateSelectorButton}
+                        onPress={() => openDatePicker("end")}
+                      >
+                        <Text style={styles.dateSelectorButtonText}>
+                          {endDate ? formatDate(endDate) : "設定しない"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.dateClearButton}
+                        onPress={() => clearDate("end")}
+                        disabled={!endDate}
+                      >
+                        <Text style={styles.dateClearButtonText}>クリア</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
+                </View>
+              {activeDateField && (
+                <View style={styles.datePickerPanel}>
+                  <DateTimePicker
+                    value={activeDateField === "start" ? startDate ?? new Date() : endDate ?? new Date()}
+                    mode="date"
+                    is24Hour={true}
+                    display="default"
+                    onChange={onDateChange}
+                    locale="ja-JP"
+                    minimumDate={new Date(1900, 0, 1)}
+                    maximumDate={new Date(2099, 11, 31)}
+                    style={styles.datePicker}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                      style={styles.datePickerCloseButton}
+                      onPress={() => setActiveDateField(null)}
+                    >
+                      <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>

@@ -47,8 +47,57 @@ export const styles = StyleSheet.create({
   dateColumn: {
     flex: 1,
   },
+  dateControlRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
+  dateSelectorButton: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+  },
+  dateSelectorButtonText: {
+    fontSize: 14,
+    color: "#333",
+  },
+  dateClearButton: {
+    backgroundColor: "#f0f0f0",
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  dateClearButtonText: {
+    fontSize: 12,
+    color: "#555",
+    fontWeight: "600",
+  },
+  datePickerPanel: {
+    borderWidth: 1,
+    borderColor: "#e0e0e0",
+    borderRadius: 8,
+    padding: 8,
+    marginBottom: 8,
+  },
   datePicker: {
     marginBottom: 8,
+  },
+  datePickerCloseButton: {
+    alignSelf: "flex-end",
+    backgroundColor: "#007AFF",
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  datePickerCloseButtonText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
   },
   button: {
     backgroundColor: "#007AFF",
