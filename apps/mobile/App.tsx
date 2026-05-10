@@ -15,7 +15,11 @@ export default function App() {
       <NavigationContainer>
         <Tab.Navigator id="root-tabs" initialRouteName="Home">
           <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen name="AddTask" component={AddTaskScreen} />
+          <Tab.Screen
+            name="AddTask"
+            component={AddTaskScreen}
+            options={{ tabBarButton: () => null }}
+          />
           <Tab.Screen name="Calendar" component={CalendarScreen} />
         </Tab.Navigator>
       </NavigationContainer>

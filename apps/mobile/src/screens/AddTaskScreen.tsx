@@ -1,19 +1,25 @@
-import { View, Text, TouchableOpacity, StyleSheet, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
+import { View, Text, TouchableOpacity, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useState, useEffect } from "react";
+import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
+import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { styles } from "../styles/screens/AddTaskScreen.styles";
+import type { RootTabParamList } from "../navigation/types";
 
 interface CategorySection {
   title: string;
   data: SavedItem[];
 }
 
-const AddTaskScreen = () => {
+type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
+
+const AddTaskScreen = ({ navigation }: Props) => {
   const { width } = useWindowDimensions();
   const isNarrowScreen = width < 360;
   const [text, setText] = useState("");
@@ -24,14 +30,9 @@ const AddTaskScreen = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [startDate, setStartDate] = useState(new Date());
-  const [endDate, setEndDate] = useState(new Date());
-  const [datePickerVisible, setDatePickerVisible] = useState<boolean>(Platform.OS === 'ios');
-  const [timePickerVisible, setTimePickerVisible] = useState<boolean>(Platform.OS === 'ios');
-  const timeOptions: Intl.DateTimeFormatOptions = {
-    hour: '2-digit',
-    minute: '2-digit',
-  };
+  const [startDate, setStartDate] = useState<Date | null>(null);
+  const [endDate, setEndDate] = useState<Date | null>(null);
+  const [activeDateField, setActiveDateField] = useState<"start" | "end" | null>(null);
 
   useEffect(() => {
     initDatabase();
@@ -74,7 +75,7 @@ const AddTaskScreen = () => {
       
       // カテゴリ別にグループ化
       const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || 'Unknown';
+        const categoryName = item.categoryName || '期間指定なし';
         const existing = acc.find(section => section.title === categoryName);
         
         if (existing) {
@@ -93,15 +94,30 @@ const AddTaskScreen = () => {
   };
 
   const onDateChange = (event: any, selectedDate: Date | undefined) => {
-    const currentDate = selectedDate || startDate;
-    setDatePickerVisible(Platform.OS === 'ios');
-    setStartDate(currentDate);
-  };
+    if (!activeDateField) {
+      return;
+    }
 
-  const onEndDateChange = (event: any, selectedDate: Date | undefined) => {
-    const currentDate = selectedDate || endDate;
-    setDatePickerVisible(Platform.OS === 'ios');
-    setEndDate(currentDate);
+    if (event?.type === "dismissed") {
+      if (Platform.OS === "android") {
+        setActiveDateField(null);
+      }
+      return;
+    }
+
+    if (!selectedDate) {
+      return;
+    }
+
+    if (activeDateField === "start") {
+      setStartDate(selectedDate);
+    } else {
+      setEndDate(selectedDate);
+    }
+
+    if (Platform.OS === "android") {
+      setActiveDateField(null);
+    }
   };
   
   const handleSubmit = async () => {
@@ -110,10 +126,7 @@ const AddTaskScreen = () => {
       return;
     }
 
-    const startDateOnly = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
-    const endDateOnly = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
-
-    if (endDateOnly < startDateOnly) {
+    if (isEndDateBeforeStartDate(startDate, endDate)) {
       Alert.alert("日付エラー", "終了日が開始日より前です。終了日を再設定してください。");
       return;
     }
@@ -123,17 +136,31 @@ const AddTaskScreen = () => {
       return;
     }
 
+    const fallbackDate = startDate ?? endDate ?? new Date();
+
     try {
       await dbManager.itemRepository.create({
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         text,
-        date: startDate.toISOString(),
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        date: fallbackDate.toISOString(),
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString(),
       });
       setText("");
-      Alert.alert("Success", "Data saved!");
+      setStartDate(null);
+      setEndDate(null);
+      setActiveDateField(null);
       await loadItems();
+      Alert.alert("登録完了", "続けて予定を登録しますか？", [
+        {
+          text: "続けて登録する",
+          style: "cancel",
+        },
+        {
+          text: "ホームへ戻る",
+          onPress: () => navigation.navigate("Home"),
+        },
+      ]);
     } catch (error) {
       Alert.alert("Error", "Failed to save data");
     }
@@ -165,8 +192,83 @@ const AddTaskScreen = () => {
     }
   };
 
+  const handleDeleteCategory = async (mode: "delete" | "uncategorize") => {
+    if (!selectedOption) {
+      Alert.alert("Error", "削除するカテゴリを選択してください");
+      return;
+    }
+
+    const categoryId = Number(selectedOption);
+
+    try {
+      if (mode === "delete") {
+        await dbManager.itemRepository.deleteByCategoryId(categoryId);
+      } else {
+        await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
+      }
+
+      await dbManager.categoryRepository.delete(categoryId);
+      setSelectedOption("");
+      await Promise.all([loadCategories(), loadItems()]);
+      Alert.alert("Success", "カテゴリを削除しました");
+    } catch (error) {
+      Alert.alert("Error", "カテゴリの削除に失敗しました");
+    }
+  };
+
+  const showDeleteCategoryDialog = () => {
+    if (!selectedOption) {
+      Alert.alert("Error", "削除するカテゴリを選択してください");
+      return;
+    }
+
+    const currentCategory = categories.find((category) => category.id.toString() === selectedOption);
+    const categoryName = currentCategory?.name ?? "このカテゴリ";
+
+    Alert.alert(
+      "カテゴリを削除",
+      `「${categoryName}」を削除します。\n登録済みの内容をどうしますか？`,
+      [
+        {
+          text: "削除",
+          style: "destructive",
+          onPress: () => {
+            void handleDeleteCategory("delete");
+          },
+        },
+        {
+          text: "未分類",
+          onPress: () => {
+            void handleDeleteCategory("uncategorize");
+          },
+        },
+        {
+          text: "キャンセル",
+          style: "cancel",
+        },
+      ],
+    );
+  };
+
   const formatDate = (date: Date): string => {
     return date.toISOString().split("T")[0];
+  };
+
+  const openDatePicker = (field: "start" | "end") => {
+    if (field === "start" && !startDate) {
+      setStartDate(new Date());
+    } else if (field === "end" && !endDate) {
+      setEndDate(new Date());
+    }
+    setActiveDateField(field);
+  };
+
+  const clearDate = (field: "start" | "end") => {
+    if (field === "start") {
+      setStartDate(null);
+      return;
+    }
+    setEndDate(null);
   };
 
   return (
@@ -229,12 +331,24 @@ const AddTaskScreen = () => {
             <View style={styles.pickerContainer}>
               <View style={styles.pickerHeader}>
                 <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
-                <TouchableOpacity
-                  style={styles.addCategoryButton}
-                  onPress={() => setShowAddCategoryModal(true)}
-                >
-                  <Text style={styles.addCategoryButtonText}>+ 追加</Text>
-                </TouchableOpacity>
+                <View style={styles.pickerActions}>
+                  <TouchableOpacity
+                    style={styles.addCategoryButton}
+                    onPress={() => setShowAddCategoryModal(true)}
+                  >
+                    <Text style={styles.addCategoryButtonText}>+ 追加</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.removeCategoryButton,
+                      !selectedOption && styles.removeCategoryButtonDisabled,
+                    ]}
+                    onPress={showDeleteCategoryDialog}
+                    disabled={!selectedOption}
+                  >
+                    <Text style={styles.removeCategoryButtonText}>削除</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               <TouchableOpacity
@@ -276,32 +390,69 @@ const AddTaskScreen = () => {
                     blurOnSubmit={true}
                     onSubmitEditing={Keyboard.dismiss}
                   />
-              {datePickerVisible && (
-                <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
+              <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
                   <View style={styles.dateColumn}>
                     <Text style={styles.dateLabel}>開始日</Text>
-                    <DateTimePicker
-                      value={startDate}
-                      mode="date"
-                      is24Hour={true}
-                      display="default"
-                      onChange={onDateChange}
-                      locale="ja-JP"
-                      style={styles.datePicker}
-                    />
+                    <View style={styles.dateControlRow}>
+                      <TouchableOpacity
+                        style={styles.dateSelectorButton}
+                        onPress={() => openDatePicker("start")}
+                      >
+                        <Text style={styles.dateSelectorButtonText}>
+                          {startDate ? formatDate(startDate) : "設定しない"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.dateClearButton}
+                        onPress={() => clearDate("start")}
+                        disabled={!startDate}
+                      >
+                        <Text style={styles.dateClearButtonText}>クリア</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                   <View style={styles.dateColumn}>
                     <Text style={styles.dateLabel}>終了日</Text>
-                    <DateTimePicker
-                      value={endDate}
-                      mode="date"
-                      is24Hour={true}
-                      display="default"
-                      onChange={onEndDateChange}
-                      locale="ja-JP"
-                      style={styles.datePicker}
-                    />
+                    <View style={styles.dateControlRow}>
+                      <TouchableOpacity
+                        style={styles.dateSelectorButton}
+                        onPress={() => openDatePicker("end")}
+                      >
+                        <Text style={styles.dateSelectorButtonText}>
+                          {endDate ? formatDate(endDate) : "設定しない"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.dateClearButton}
+                        onPress={() => clearDate("end")}
+                        disabled={!endDate}
+                      >
+                        <Text style={styles.dateClearButtonText}>クリア</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
+                </View>
+              {activeDateField && (
+                <View style={styles.datePickerPanel}>
+                  <DateTimePicker
+                    value={activeDateField === "start" ? startDate ?? new Date() : endDate ?? new Date()}
+                    mode="date"
+                    is24Hour={true}
+                    display="default"
+                    onChange={onDateChange}
+                    locale="ja-JP"
+                    minimumDate={new Date(1900, 0, 1)}
+                    maximumDate={new Date(2099, 11, 31)}
+                    style={styles.datePicker}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                      style={styles.datePickerCloseButton}
+                      onPress={() => setActiveDateField(null)}
+                    >
+                      <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
               <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
@@ -342,271 +493,5 @@ const AddTaskScreen = () => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#fff",
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-    paddingTop: 8,
-    paddingBottom: 32,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  date: {
-    fontSize: 12,
-    color: "#999",
-    marginBottom: 24,
-    textAlign: "center",
-  },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginTop: 12,
-    marginBottom: 6,
-  },
-  dateRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  dateRowStacked: {
-    flexDirection: "column",
-  },
-  dateColumn: {
-    flex: 1,
-  },
-  datePicker: {
-    marginBottom: 8,
-  },
-  button: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignSelf: "center",
-  },
-  pickerContainer: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 10,
-  },
-  pickerHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  pickerLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  addCategoryButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-  },
-  addCategoryButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  picker: {
-    height: Platform.OS === 'ios' ? 150 : 50,
-  },
-  pickerDisabled: {
-    opacity: 0.5,
-  },
-  pickerItem: {
-    height: 150, // iOSのみ
-  },
-  checkboxRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  checkbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: "#888",
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-    backgroundColor: "#fff",
-  },
-  checkboxChecked: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
-  },
-  checkboxMark: {
-    color: "#fff",
-    fontWeight: "700",
-    lineHeight: 16,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: "#333",
-  },
-  selectedText: {
-    padding: 10,
-    fontSize: 14,
-    color: '#666',
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  formContainer: {
-    marginTop: 20,
-    width: '100%',
-  },
-  textarea: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  submitButton: {
-    backgroundColor: "#28a745",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  navigateButton: {
-    backgroundColor: "#007AFF",
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  listContainer: {
-    marginTop: 20,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  itemContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 8,
-    backgroundColor: '#f9f9f9',
-  },
-  itemTextContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  itemText: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  itemDate: {
-    fontSize: 10,
-    color: '#999',
-  },
-  deleteButton: {
-    backgroundColor: '#dc3545',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 4,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 12,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 20,
-    width: '80%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: '#ccc',
-  },
-  modalButtonSubmit: {
-    backgroundColor: '#007AFF',
-  },
-  modalButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  sectionHeader: {
-    backgroundColor: '#007AFF',
-    padding: 10,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-  sectionHeaderText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  emptyListText: {
-    fontSize: 14,
-    color: '#666',
-    paddingVertical: 12,
-  },
-});
 
 export default AddTaskScreen;
