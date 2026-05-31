@@ -1,4 +1,3 @@
----
 # API 仕様
 
 ## 認証
@@ -82,4 +81,3 @@
 - 環境変数
   - API ベースURL向けの `VITE_API_URL`, `REACT_APP_API_URL`, `NEXT_PUBLIC_*` などの参照は確認できない。
   - `process.env` の利用は `apps/desktop/src/main.ts` の `NODE_ENV` 判定のみで、API には未使用。
----
