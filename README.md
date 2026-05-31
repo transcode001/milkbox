@@ -23,7 +23,8 @@ An application that enables grouping and managing tasks efficiently.
 
 ### Packages
 
-- `@milkbox/shared`: Shared business logic and type definitions
+- `@milkbox/shared`: Shared types and repository interfaces
+- `@repo/core`: Common logic and API utilities
 - `@repo/ui`: Shared UI component library
 - `@repo/eslint-config`: ESLint configurations
 - `@repo/typescript-config`: TypeScript configurations
@@ -93,6 +94,6 @@ pnpm build:desktop
 
 ## License
 
-Proprietary - All Rights Reserved
+Proprietary
 
 This software is private and confidential. Unauthorized copying, distribution, or use of this software is strictly prohibited.

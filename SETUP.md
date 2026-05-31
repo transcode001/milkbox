@@ -173,4 +173,4 @@ See [apps/mobile/README.md](apps/mobile/README.md)
 
 ## License
 
-MIT
+Proprietary

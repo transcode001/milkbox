@@ -55,8 +55,8 @@
 - テスト（モバイル）: Jest, jest-expo, @testing-library/react-native
 
 ### 共有パッケージ
-- `@milkbox/shared`: 共有型・リポジトリ契約
-- `@repo/core`: 共通ロジック/APIユーティリティ
+- `@milkbox/shared`: 共有型・リポジトリインターフェース
+- `@repo/core`: 共通ロジック・API ユーティリティ
 - `@repo/ui`: Web/Desktop 向け UI コンポーネント
 - `@repo/typescript-config`: 共通 TypeScript 設定
 ---
