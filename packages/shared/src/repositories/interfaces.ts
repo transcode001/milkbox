@@ -1,7 +1,6 @@
 import { SavedItem, CreateItemDto, UpdateItemDto } from './types';
 
 export interface IItemRepository {
-  initialize(): Promise<void>;
   findAll(): Promise<SavedItem[]>;
   findById(id: number): Promise<SavedItem | null>;
   create(data: CreateItemDto): Promise<SavedItem>;

@@ -5,6 +5,7 @@ import HomeScreen from "./src/screens/HomeScreen";
 import AddTaskScreen from "./src/screens/AddTaskScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
 import type { RootTabParamList } from "./src/navigation/types";
+import { DatabaseProvider } from "./src/contexts/DatabaseContext";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 
@@ -12,17 +13,19 @@ export default function App() {
   return (
     <>
       <StatusBar style="auto" />
-      <NavigationContainer>
-        <Tab.Navigator id="root-tabs" initialRouteName="Home">
-          <Tab.Screen name="Home" component={HomeScreen} />
-          <Tab.Screen
-            name="AddTask"
-            component={AddTaskScreen}
-            options={{ tabBarButton: () => null }}
-          />
-          <Tab.Screen name="Calendar" component={CalendarScreen} />
-        </Tab.Navigator>
-      </NavigationContainer>
+      <DatabaseProvider>
+        <NavigationContainer>
+          <Tab.Navigator id="root-tabs" initialRouteName="Home">
+            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen
+              name="AddTask"
+              component={AddTaskScreen}
+              options={{ tabBarButton: () => null }}
+            />
+            <Tab.Screen name="Calendar" component={CalendarScreen} />
+          </Tab.Navigator>
+        </NavigationContainer>
+      </DatabaseProvider>
     </>
   );
 }

@@ -4,13 +4,12 @@ import React, { useState, useEffect } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { Category } from "../repositories/sqlite/CategoryRepository";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import type { RootTabParamList } from "../navigation/types";
+import { useDatabaseManager } from "../contexts/DatabaseContext";
 
 interface CategorySection {
   title: string;
@@ -24,7 +23,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const isNarrowScreen = width < 360;
   const [text, setText] = useState("");
   const [items, setItems] = useState<CategorySection[]>([]);
-  const [dbManager] = useState(() => new DatabaseManager());
+  const dbManager = useDatabaseManager();
   const [selectedOption, setSelectedOption] = useState<string>("");
   const [noCategoryChecked, setNoCategoryChecked] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -40,16 +39,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
   const initDatabase = async () => {
     try{
-      await dbManager.initialize();
-      // 開発モード時のみDBをクリア
-      if (__DEV__) {
-        const devInitKey = "devDbInitialized";
-        const hasInitialized = await AsyncStorage.getItem(devInitKey);
-        if (!hasInitialized) {
-          await dbManager.clearAll();
-          await AsyncStorage.setItem(devInitKey, "true");
-        }
-      }
       await loadCategories();
       await loadItems();
     }catch(error){
@@ -438,7 +427,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     value={activeDateField === "start" ? startDate ?? new Date() : endDate ?? new Date()}
                     mode="date"
                     is24Hour={true}
-                    display="default"
+                    display={Platform.OS === "ios" ? "inline" : "calendar"}
                     onChange={onDateChange}
                     locale="ja-JP"
                     minimumDate={new Date(1900, 0, 1)}

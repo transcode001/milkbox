@@ -4,9 +4,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/types";
-import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useDatabaseManager } from "../contexts/DatabaseContext";
 
 interface CategorySection {
   title: string;
@@ -19,8 +18,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [dbManager] = useState(() => new DatabaseManager());
-  const devDbClearKey = "dev_db_cleared_v1";
+  const dbManager = useDatabaseManager();
 
   useEffect(() => {
     loadItems();
@@ -36,14 +34,6 @@ const HomeScreen = ({ navigation }: Props) => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      await dbManager.initialize();
-      if (__DEV__) {
-        const cleared = await AsyncStorage.getItem(devDbClearKey);
-        if (!cleared) {
-          await dbManager.clearAll();
-          await AsyncStorage.setItem(devDbClearKey, "1");
-        }
-      }
       const result = await dbManager.itemRepository.findAllWithCategory();
       const grouped = result.reduce((acc, item) => {
         const categoryName = item.categoryName || "期間指定なし";

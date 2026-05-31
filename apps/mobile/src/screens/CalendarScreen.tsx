@@ -1,15 +1,17 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import { styles } from "../styles/screens/CalendarScreen.styles";
+import { useDatabaseManager } from "../contexts/DatabaseContext";
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -71,12 +73,23 @@ const CalendarScreen = () => {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [items, setItems] = useState<SavedItem[]>([]);
-  const [dbManager] = useState(() => new DatabaseManager());
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const dbManager = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
-    await dbManager.initialize();
-    const result = await dbManager.itemRepository.findAllWithCategory();
-    setItems(result);
+    try {
+      setLoading(true);
+      setErrorMessage(null);
+      const result = await dbManager.itemRepository.findAllWithCategory();
+      setItems(result);
+      setErrorMessage(null);
+    } catch (error) {
+      console.error("Failed to load calendar items", error);
+      setErrorMessage("予定の読み込みに失敗しました");
+    } finally {
+      setLoading(false);
+    }
   }, [dbManager]);
 
   useFocusEffect(
@@ -116,111 +129,134 @@ const CalendarScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        <View style={styles.header}>
-          <Pressable style={styles.monthButton} onPress={() => moveMonth(-1)}>
-            <Text style={styles.monthButtonText}>前月</Text>
-          </Pressable>
-          <Text style={styles.headerTitle}>{formatMonthLabel(visibleMonth)}</Text>
-          <Pressable style={styles.monthButton} onPress={() => moveMonth(1)}>
-            <Text style={styles.monthButtonText}>次月</Text>
-          </Pressable>
+      {loading ? (
+        <View style={localStyles.stateContainer}>
+          <ActivityIndicator size="large" />
         </View>
-
-        <View style={styles.weekRow}>
-          {WEEKDAY_LABELS.map((label) => (
-            <View key={label} style={styles.weekCell}>
-              <Text style={styles.weekLabel}>{label}</Text>
-            </View>
-          ))}
+      ) : errorMessage ? (
+        <View style={localStyles.stateContainer}>
+          <Text style={localStyles.stateText}>{errorMessage}</Text>
         </View>
+      ) : (
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.header}>
+            <Pressable style={styles.monthButton} onPress={() => moveMonth(-1)}>
+              <Text style={styles.monthButtonText}>前月</Text>
+            </Pressable>
+            <Text style={styles.headerTitle}>{formatMonthLabel(visibleMonth)}</Text>
+            <Pressable style={styles.monthButton} onPress={() => moveMonth(1)}>
+              <Text style={styles.monthButtonText}>次月</Text>
+            </Pressable>
+          </View>
 
-        <View style={styles.calendarBody}>
-          {monthGrid.map((week, weekIndex) => (
-            <View key={`week-${weekIndex}`} style={styles.weekRow}>
-              {week.map((date) => {
-                const dateKey = createDateKey(date);
-                const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
-                const isSelected = dateKey === selectedDateKey;
-                const isToday = dateKey === todayKey;
-                const dayItems = itemsByDate.get(dateKey) ?? [];
-
-                return (
-                  <Pressable
-                    key={dateKey}
-                    style={[
-                      styles.dayCell,
-                      isSelected && styles.dayCellSelected,
-                      !isCurrentMonth && styles.dayCellMuted,
-                    ]}
-                    onPress={() => setSelectedDate(startOfDay(date))}
-                  >
-                    <Text
-                      style={[
-                        styles.dayNumber,
-                        !isCurrentMonth && styles.dayNumberMuted,
-                        isSelected && styles.dayNumberSelected,
-                        isToday && !isSelected && styles.dayNumberToday,
-                      ]}
-                    >
-                      {date.getDate()}
-                    </Text>
-                    <View style={styles.dayMeta}>
-                      {dayItems.length > 0 ? (
-                        <>
-                          <View style={[styles.eventDot, isSelected && styles.eventDotSelected]} />
-                          <Text style={[styles.eventCount, isSelected && styles.eventCountSelected]}>
-                            {dayItems.length}件
-                          </Text>
-                        </>
-                      ) : null}
-                    </View>
-                  </Pressable>
-                );
-              })}
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.scheduleHeader}>
-          <Text style={styles.scheduleTitle}>{selectedDateKey} の予定</Text>
-          <Pressable
-            style={styles.todayButton}
-            onPress={() => {
-              const today = startOfDay(new Date());
-              setVisibleMonth(today);
-              setSelectedDate(today);
-            }}
-          >
-            <Text style={styles.todayButtonText}>今日へ</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.scheduleList}>
-          {selectedItems.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Text style={styles.emptyTitle}>予定はありません</Text>
-              <Text style={styles.emptyText}>AddTask で登録した予定がここに表示されます。</Text>
-            </View>
-          ) : (
-            selectedItems.map((item) => (
-              <View key={item.id} style={styles.scheduleCard}>
-                <View style={styles.scheduleRow}>
-                  <Text style={styles.scheduleTime}>{formatScheduleTime(item)}</Text>
-                  {item.categoryName ? (
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryBadgeText}>{item.categoryName}</Text>
-                    </View>
-                  ) : null}
-                </View>
-                <Text style={styles.scheduleText}>{item.text}</Text>
+          <View style={styles.weekRow}>
+            {WEEKDAY_LABELS.map((label) => (
+              <View key={label} style={styles.weekCell}>
+                <Text style={styles.weekLabel}>{label}</Text>
               </View>
-            ))
-          )}
-        </View>
-      </ScrollView>
+            ))}
+          </View>
+
+          <View style={styles.calendarBody}>
+            {monthGrid.map((week, weekIndex) => (
+              <View key={`week-${weekIndex}`} style={styles.weekRow}>
+                {week.map((date) => {
+                  const dateKey = createDateKey(date);
+                  const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
+                  const isSelected = dateKey === selectedDateKey;
+                  const isToday = dateKey === todayKey;
+                  const dayItems = itemsByDate.get(dateKey) ?? [];
+
+                  return (
+                    <Pressable
+                      key={dateKey}
+                      style={[
+                        styles.dayCell,
+                        isSelected && styles.dayCellSelected,
+                        !isCurrentMonth && styles.dayCellMuted,
+                      ]}
+                      onPress={() => setSelectedDate(startOfDay(date))}
+                    >
+                      <Text
+                        style={[
+                          styles.dayNumber,
+                          !isCurrentMonth && styles.dayNumberMuted,
+                          isSelected && styles.dayNumberSelected,
+                          isToday && !isSelected && styles.dayNumberToday,
+                        ]}
+                      >
+                        {date.getDate()}
+                      </Text>
+                      <View style={styles.dayMeta}>
+                        {dayItems.length > 0 ? (
+                          <>
+                            <View style={[styles.eventDot, isSelected && styles.eventDotSelected]} />
+                            <Text style={[styles.eventCount, isSelected && styles.eventCountSelected]}>
+                              {dayItems.length}件
+                            </Text>
+                          </>
+                        ) : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.scheduleHeader}>
+            <Text style={styles.scheduleTitle}>{selectedDateKey} の予定</Text>
+            <Pressable
+              style={styles.todayButton}
+              onPress={() => {
+                const today = startOfDay(new Date());
+                setVisibleMonth(today);
+                setSelectedDate(today);
+              }}
+            >
+              <Text style={styles.todayButtonText}>今日へ</Text>
+            </Pressable>
+          </View>
+
+          <View style={styles.scheduleList}>
+            {selectedItems.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Text style={styles.emptyTitle}>予定はありません</Text>
+                <Text style={styles.emptyText}>AddTask で登録した予定がここに表示されます。</Text>
+              </View>
+            ) : (
+              selectedItems.map((item) => (
+                <View key={item.id} style={styles.scheduleCard}>
+                  <View style={styles.scheduleRow}>
+                    <Text style={styles.scheduleTime}>{formatScheduleTime(item)}</Text>
+                    {item.categoryName ? (
+                      <View style={styles.categoryBadge}>
+                        <Text style={styles.categoryBadgeText}>{item.categoryName}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text style={styles.scheduleText}>{item.text}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
+
+const localStyles = StyleSheet.create({
+  stateContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  stateText: {
+    fontSize: 14,
+    color: "#666",
+  },
+});
 
 export default CalendarScreen;
