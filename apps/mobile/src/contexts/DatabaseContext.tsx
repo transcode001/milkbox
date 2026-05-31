@@ -44,6 +44,8 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
     };
   }, [dbManager]);
 
+  const value = useMemo(() => ({ dbManager }), [dbManager]);
+
   if (initError) {
     throw initError;
   }
@@ -51,8 +53,6 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
   if (!isInitialized) {
     return null;
   }
-
-  const value = useMemo(() => ({ dbManager }), [dbManager]);
 
   return <DatabaseContext.Provider value={value}>{children}</DatabaseContext.Provider>;
 };
