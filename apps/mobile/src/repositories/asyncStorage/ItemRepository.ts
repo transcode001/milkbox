@@ -36,7 +36,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
   async update(id: number, data: UpdateItemDto): Promise<void> {
     const items = await this.findAll();
     const index = items.findIndex(item => item.id === id);
-    if (index !== -1 && data.text) {
+    if (index !== -1 && data.text !== undefined) {
       items[index].text = data.text;
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     }

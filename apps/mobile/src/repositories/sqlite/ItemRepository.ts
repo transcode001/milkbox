@@ -3,9 +3,6 @@ import * as SQLite from 'expo-sqlite';
 import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 
 export class SQLiteItemRepository implements IItemRepository {
-  initialize(): Promise<void> {
-    throw new Error('Method not implemented.');
-  }
   private db: SQLite.SQLiteDatabase | null = null;
 
   async setDatabase(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -113,7 +110,7 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async update(id: number, data: UpdateItemDto): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    if (data.text) {
+    if (data.text !== undefined) {
       await this.db.runAsync(
         'UPDATE items SET text = ? WHERE id = ?',
         [data.text, id]
