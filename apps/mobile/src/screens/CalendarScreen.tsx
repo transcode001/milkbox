@@ -58,7 +58,7 @@ function formatMonthLabel(date: Date): string {
 }
 
 function formatScheduleTime(item: SavedItem): string {
-  const source = item.startDate ?? item.date;
+  const source = item.startDate ?? item.endDate ?? item.date;
   if (!source.includes("T")) {
     return "終日";
   }
@@ -102,7 +102,12 @@ const CalendarScreen = () => {
     const grouped = new Map<string, SavedItem[]>();
 
     for (const item of items) {
-      const dateKey = toDateKey(item.startDate ?? item.date);
+      // 「期間指定なし」は日付表示の対象外にする
+      if (!item.startDate && !item.endDate) {
+        continue;
+      }
+
+      const dateKey = toDateKey(item.startDate ?? item.endDate ?? item.date);
       const current = grouped.get(dateKey) ?? [];
       current.push(item);
       grouped.set(dateKey, current);
@@ -117,8 +122,8 @@ const CalendarScreen = () => {
   const selectedItems = useMemo(() => {
     const currentItems = itemsByDate.get(selectedDateKey) ?? [];
     return [...currentItems].sort((left, right) => {
-      const leftTime = new Date(left.startDate ?? left.date).getTime();
-      const rightTime = new Date(right.startDate ?? right.date).getTime();
+      const leftTime = new Date(left.startDate ?? left.endDate ?? left.date).getTime();
+      const rightTime = new Date(right.startDate ?? right.endDate ?? right.date).getTime();
       return leftTime - rightTime;
     });
   }, [itemsByDate, selectedDateKey]);
