@@ -1,16 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, SectionList, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/types";
-import { SavedItem } from "@milkbox/shared/repositories/types";
+import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
-
-interface CategorySection {
-  title: string;
-  data: SavedItem[];
-}
 
 type Props = BottomTabScreenProps<RootTabParamList, "Home">;
 
@@ -19,10 +14,6 @@ const HomeScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dbManager = useDatabaseManager();
-
-  useEffect(() => {
-    loadItems();
-  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -35,18 +26,7 @@ const HomeScreen = ({ navigation }: Props) => {
       setLoading(true);
       setErrorMessage(null);
       const result = await dbManager.itemRepository.findAllWithCategory();
-      const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || "期間指定なし";
-        const existing = acc.find((section) => section.title === categoryName);
-
-        if (existing) {
-          existing.data.push(item);
-        } else {
-          acc.push({ title: categoryName, data: [item] });
-        }
-
-        return acc;
-      }, [] as CategorySection[]);
+      const grouped = groupByCategory(result);
 
       setSections(grouped);
     } catch (error) {
