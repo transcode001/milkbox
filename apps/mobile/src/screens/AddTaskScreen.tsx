@@ -1,264 +1,68 @@
-import { View, Text, TouchableOpacity, Alert, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { Category } from "../repositories/sqlite/CategoryRepository";
-import { SavedItem } from "@milkbox/shared/repositories/types";
-import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import type { RootTabParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
-
-interface CategorySection {
-  title: string;
-  data: SavedItem[];
-}
+import { useCategory } from "../hooks/useCategory";
+import { useDatePicker } from "../hooks/useDatePicker";
+import { useItemForm } from "../hooks/useItemForm";
 
 type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
 
 const AddTaskScreen = ({ navigation }: Props) => {
   const { width } = useWindowDimensions();
   const isNarrowScreen = width < 360;
-  const [text, setText] = useState("");
-  const [items, setItems] = useState<CategorySection[]>([]);
   const dbManager = useDatabaseManager();
-  const [selectedOption, setSelectedOption] = useState<string>("");
-  const [noCategoryChecked, setNoCategoryChecked] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
-  const [newCategoryName, setNewCategoryName] = useState("");
-  const [startDate, setStartDate] = useState<Date | null>(null);
-  const [endDate, setEndDate] = useState<Date | null>(null);
-  const [activeDateField, setActiveDateField] = useState<"start" | "end" | null>(null);
+  const {
+    categories,
+    selectedOption,
+    noCategoryChecked,
+    showAddCategoryModal,
+    newCategoryName,
+    setSelectedOption,
+    setNoCategoryChecked,
+    setShowAddCategoryModal,
+    setNewCategoryName,
+    loadCategories,
+    handleAddCategory,
+    showDeleteCategoryDialog,
+  } = useCategory({ dbManager });
+  const {
+    startDate,
+    endDate,
+    activeDateField,
+    setActiveDateField,
+    setStartDate,
+    setEndDate,
+    onDateChange,
+    openDatePicker,
+    clearDate,
+    formatDate,
+  } = useDatePicker();
+  const { text, items, setText, loadItems, handleSubmit, deleteItem } = useItemForm({
+    dbManager,
+    selectedOption,
+    noCategoryChecked,
+    startDate,
+    endDate,
+    setStartDate,
+    setEndDate,
+    setActiveDateField,
+    onNavigateHome: () => navigation.navigate("Home"),
+  });
 
   useEffect(() => {
-    initDatabase();
-  }, []);
-
-  const initDatabase = async () => {
-    try{
+    const initDatabase = async () => {
       await loadCategories();
       await loadItems();
-    }catch(error){
-      Alert.alert("Error", error.message);
-    }
-  };
+    };
 
-  const loadCategories = async () => {
-    try {
-      const result = await dbManager.categoryRepository.findAll();
-      setCategories(result);
-      if (result.length > 0 && (!selectedOption || !result.some((category) => category.id.toString() === selectedOption))) {
-        setSelectedOption(result[0].id.toString());
-      }
-    } catch (error) {
-      Alert.alert("Error", "Failed to load categories");
-    }
-  };
-
-  const loadItems = async () => {
-    try {
-      const result = await dbManager.itemRepository.findAllWithCategory();
-      
-      // カテゴリ別にグループ化
-      const grouped = result.reduce((acc, item) => {
-        const categoryName = item.categoryName || '期間指定なし';
-        const existing = acc.find(section => section.title === categoryName);
-        
-        if (existing) {
-          existing.data.push(item);
-        } else {
-          acc.push({ title: categoryName, data: [item] });
-        }
-        
-        return acc;
-      }, [] as CategorySection[]);
-      
-      setItems(grouped);
-    } catch (error) {
-      Alert.alert("Error", "Failed to load data");
-    }
-  };
-
-  const onDateChange = (event: any, selectedDate: Date | undefined) => {
-    if (!activeDateField) {
-      return;
-    }
-
-    if (event?.type === "dismissed") {
-      if (Platform.OS === "android") {
-        setActiveDateField(null);
-      }
-      return;
-    }
-
-    if (!selectedDate) {
-      return;
-    }
-
-    if (activeDateField === "start") {
-      setStartDate(selectedDate);
-    } else {
-      setEndDate(selectedDate);
-    }
-
-    if (Platform.OS === "android") {
-      setActiveDateField(null);
-    }
-  };
-  
-  const handleSubmit = async () => {
-    if (!text.trim()) {
-      Alert.alert("Error", "Please enter some text");
-      return;
-    }
-
-    if (isEndDateBeforeStartDate(startDate, endDate)) {
-      Alert.alert("日付エラー", "終了日が開始日より前です。終了日を再設定してください。");
-      return;
-    }
-
-    if (!noCategoryChecked && !selectedOption) {
-      Alert.alert("Error", "カテゴリを選択してください");
-      return;
-    }
-
-    const fallbackDate = startDate ?? endDate ?? new Date();
-
-    try {
-      await dbManager.itemRepository.create({
-        categoryId: noCategoryChecked ? undefined : Number(selectedOption),
-        text,
-        date: fallbackDate.toISOString(),
-        startDate: startDate?.toISOString(),
-        endDate: endDate?.toISOString(),
-      });
-      setText("");
-      setStartDate(null);
-      setEndDate(null);
-      setActiveDateField(null);
-      await loadItems();
-      Alert.alert("登録完了", "続けて予定を登録しますか？", [
-        {
-          text: "続けて登録する",
-          style: "cancel",
-        },
-        {
-          text: "ホームへ戻る",
-          onPress: () => navigation.navigate("Home"),
-        },
-      ]);
-    } catch (error) {
-      Alert.alert("Error", "Failed to save data");
-    }
-  };
-
-  const deleteItem = async (id: number) => {
-    try{
-      await dbManager.itemRepository.delete(id);
-      await loadItems();
-    }catch(error){
-      Alert.alert("Error", "Failed to delete data");
-    }
-  };
-
-  const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) {
-      Alert.alert("Error", "Please enter category name");
-      return;
-    }
-
-    try {
-      await dbManager.categoryRepository.create(newCategoryName);
-      setNewCategoryName("");
-      setShowAddCategoryModal(false);
-      await loadCategories();
-      Alert.alert("Success", "Category added!");
-    } catch (error) {
-      Alert.alert("Error", "Failed to add category");
-    }
-  };
-
-  const handleDeleteCategory = async (mode: "delete" | "uncategorize") => {
-    if (!selectedOption) {
-      Alert.alert("Error", "削除するカテゴリを選択してください");
-      return;
-    }
-
-    const categoryId = Number(selectedOption);
-
-    try {
-      if (mode === "delete") {
-        await dbManager.itemRepository.deleteByCategoryId(categoryId);
-      } else {
-        await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
-      }
-
-      await dbManager.categoryRepository.delete(categoryId);
-      setSelectedOption("");
-      await Promise.all([loadCategories(), loadItems()]);
-      Alert.alert("Success", "カテゴリを削除しました");
-    } catch (error) {
-      Alert.alert("Error", "カテゴリの削除に失敗しました");
-    }
-  };
-
-  const showDeleteCategoryDialog = () => {
-    if (!selectedOption) {
-      Alert.alert("Error", "削除するカテゴリを選択してください");
-      return;
-    }
-
-    const currentCategory = categories.find((category) => category.id.toString() === selectedOption);
-    const categoryName = currentCategory?.name ?? "このカテゴリ";
-
-    Alert.alert(
-      "カテゴリを削除",
-      `「${categoryName}」を削除します。\n登録済みの内容をどうしますか？`,
-      [
-        {
-          text: "削除",
-          style: "destructive",
-          onPress: () => {
-            void handleDeleteCategory("delete");
-          },
-        },
-        {
-          text: "未分類",
-          onPress: () => {
-            void handleDeleteCategory("uncategorize");
-          },
-        },
-        {
-          text: "キャンセル",
-          style: "cancel",
-        },
-      ],
-    );
-  };
-
-  const formatDate = (date: Date): string => {
-    return date.toISOString().split("T")[0];
-  };
-
-  const openDatePicker = (field: "start" | "end") => {
-    if (field === "start" && !startDate) {
-      setStartDate(new Date());
-    } else if (field === "end" && !endDate) {
-      setEndDate(new Date());
-    }
-    setActiveDateField(field);
-  };
-
-  const clearDate = (field: "start" | "end") => {
-    if (field === "start") {
-      setStartDate(null);
-      return;
-    }
-    setEndDate(null);
-  };
+    void initDatabase();
+  }, [loadCategories, loadItems]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -332,7 +136,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                       styles.removeCategoryButton,
                       !selectedOption && styles.removeCategoryButtonDisabled,
                     ]}
-                    onPress={showDeleteCategoryDialog}
+                    onPress={() => showDeleteCategoryDialog(loadItems)}
                     disabled={!selectedOption}
                   >
                     <Text style={styles.removeCategoryButtonText}>削除</Text>
