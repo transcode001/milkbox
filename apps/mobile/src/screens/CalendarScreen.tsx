@@ -58,12 +58,10 @@ function getItemDateKeys(item: SavedItem): string[] {
     const rangeEnd = startDate <= endDate ? endDate : startDate;
     const keys: string[] = [];
 
-    for (
-      let current = rangeStart;
-      current.getTime() <= rangeEnd.getTime();
-      current = addDays(current, 1)
-    ) {
+    let current = rangeStart;
+    while (current.getTime() <= rangeEnd.getTime()) {
       keys.push(createDateKey(current));
+      current = addDays(current, 1);
     }
 
     return keys;
