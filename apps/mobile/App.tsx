@@ -1,6 +1,7 @@
 import { StatusBar } from "expo-status-bar";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import HomeScreen from "./src/screens/HomeScreen";
 import AddTaskScreen from "./src/screens/AddTaskScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
@@ -11,7 +12,7 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function App() {
   return (
-    <>
+    <GestureHandlerRootView style={{ flex: 1 }}>
       <StatusBar style="auto" />
       <DatabaseProvider>
         <NavigationContainer>
@@ -26,6 +27,6 @@ export default function App() {
           </Tab.Navigator>
         </NavigationContainer>
       </DatabaseProvider>
-    </>
+    </GestureHandlerRootView>
   );
 }

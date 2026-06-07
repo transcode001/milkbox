@@ -53,7 +53,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
 
   const handleAddCategory = useCallback(async () => {
     if (!newCategoryName.trim()) {
-      Alert.alert("Error", "Please enter task name");
+      Alert.alert("Error", "Please enter category name");
       return;
     }
 
@@ -62,16 +62,16 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       setNewCategoryName("");
       setShowAddCategoryModal(false);
       await loadCategories();
-      Alert.alert("Success", "Task added!");
+      Alert.alert("Success", "Category added!");
     } catch (error) {
-      Alert.alert("Error", "Failed to add task");
+      Alert.alert("Error", "Failed to add category");
     }
   }, [dbManager, loadCategories, newCategoryName]);
 
   const handleDeleteCategory = useCallback(
     async (mode: DeleteCategoryMode, loadItems: () => Promise<void>) => {
       if (!selectedOption) {
-        Alert.alert("Error", "削除するタスクを選択してください");
+        Alert.alert("Error", "削除するカテゴリを選択してください");
         return;
       }
 
@@ -87,9 +87,9 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         await dbManager.categoryRepository.delete(categoryId);
         setSelectedOption("");
         await Promise.all([loadCategories(), loadItems()]);
-        Alert.alert("Success", "タスクを削除しました");
+        Alert.alert("Success", "カテゴリを削除しました");
       } catch (error) {
-        Alert.alert("Error", "タスクの削除に失敗しました");
+        Alert.alert("Error", "カテゴリの削除に失敗しました");
       }
     },
     [dbManager, loadCategories, selectedOption],
@@ -98,15 +98,15 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   const showDeleteCategoryDialog = useCallback(
     (loadItems: () => Promise<void>) => {
       if (!selectedOption) {
-        Alert.alert("Error", "削除するタスクを選択してください");
+        Alert.alert("Error", "削除するカテゴリを選択してください");
         return;
       }
 
       const currentCategory = categories.find((category) => category.id.toString() === selectedOption);
-      const categoryName = currentCategory?.name ?? "このタスク";
+      const categoryName = currentCategory?.name ?? "このカテゴリ";
 
       Alert.alert(
-        "タスクを削除",
+        "カテゴリを削除",
         `「${categoryName}」を削除します。\n登録済みの内容をどうしますか？`,
         [
           {

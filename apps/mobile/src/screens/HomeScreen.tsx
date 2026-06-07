@@ -1,7 +1,8 @@
 import { useCallback, useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, SectionList, ActivityIndicator } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, SectionList, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
+import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
@@ -40,6 +41,27 @@ const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("AddTask");
   };
 
+  const handleDeleteItem = async (id: number) => {
+    try {
+      await dbManager.itemRepository.delete(id);
+      await loadItems();
+    } catch (error) {
+      Alert.alert("Error", "Failed to delete item");
+    }
+  };
+
+  const renderRightActions = (id: number) => (
+    <TouchableOpacity
+      style={styles.deleteAction}
+      onPress={() => {
+        void handleDeleteItem(id);
+      }}
+      activeOpacity={0.8}
+    >
+      <Text style={styles.deleteActionText}>削除</Text>
+    </TouchableOpacity>
+  );
+
   const formatItemDate = (value?: string) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -56,9 +78,9 @@ const HomeScreen = ({ navigation }: Props) => {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tasks</Text>
+        <Text style={styles.title}>Categories</Text>
         <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
-        <Text style={styles.addTaskButtonText}>Add Task</Text>
+          <Text style={styles.addTaskButtonText}>Add Task</Text>
         </TouchableOpacity>
       </View>
 
@@ -85,25 +107,27 @@ const HomeScreen = ({ navigation }: Props) => {
             </View>
           )}
           renderItem={({ item }) => (
-            <View style={styles.itemContainer}>
-              <Text style={styles.itemText}>{item.text}</Text>
-              {hasDateRange(item) ? (
-                <View style={styles.itemDateRow}>
-                  {item.startDate ? (
-                    <View style={styles.itemDateColumn}>
-                      <Text style={styles.itemDateLabel}>開始日</Text>
-                      <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
-                    </View>
-                  ) : null}
-                  {item.endDate ? (
-                    <View style={styles.itemDateColumn}>
-                      <Text style={styles.itemDateLabel}>終了日</Text>
-                      <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
-                    </View>
-                  ) : null}
-                </View>
-              ) : null}
-            </View>
+            <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+              <View style={styles.itemContainer}>
+                <Text style={styles.itemText}>{item.text}</Text>
+                {hasDateRange(item) ? (
+                  <View style={styles.itemDateRow}>
+                    {item.startDate ? (
+                      <View style={styles.itemDateColumn}>
+                        <Text style={styles.itemDateLabel}>開始日</Text>
+                        <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
+                      </View>
+                    ) : null}
+                    {item.endDate ? (
+                      <View style={styles.itemDateColumn}>
+                        <Text style={styles.itemDateLabel}>終了日</Text>
+                        <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            </Swipeable>
           )}
         />
       )}
@@ -154,7 +178,9 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   itemContainer: {
+    backgroundColor: "#fff",
     paddingVertical: 8,
+    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
@@ -189,6 +215,20 @@ const styles = StyleSheet.create({
   stateText: {
     fontSize: 14,
     color: "#666",
+  },
+  deleteAction: {
+    width: 84,
+    height: "100%",
+    backgroundColor: "#D11A2A",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  deleteActionText: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 13,
   },
 });
 
