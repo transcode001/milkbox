@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -28,6 +28,49 @@ function toDateKey(value: string): string {
     return value.split("T")[0];
   }
   return value;
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+function parseItemDate(value?: string): Date | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return null;
+  }
+
+  return startOfDay(parsed);
+}
+
+function getItemDateKeys(item: SavedItem): string[] {
+  const startDate = parseItemDate(item.startDate);
+  const endDate = parseItemDate(item.endDate);
+
+  if (startDate && endDate) {
+    const rangeStart = startDate <= endDate ? startDate : endDate;
+    const rangeEnd = startDate <= endDate ? endDate : startDate;
+    const keys: string[] = [];
+
+    for (
+      let current = rangeStart;
+      current.getTime() <= rangeEnd.getTime();
+      current = addDays(current, 1)
+    ) {
+      keys.push(createDateKey(current));
+    }
+
+    return keys;
+  }
+
+  const sourceDate = startDate ?? endDate ?? parseItemDate(item.date);
+  return sourceDate ? [createDateKey(sourceDate)] : [];
 }
 
 function getCalendarStart(date: Date): Date {
@@ -75,6 +118,8 @@ const CalendarScreen = () => {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const scheduleHeaderYRef = useRef(0);
   const dbManager = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
@@ -102,15 +147,22 @@ const CalendarScreen = () => {
     const grouped = new Map<string, SavedItem[]>();
 
     for (const item of items) {
-      // 「期間指定なし」は日付表示の対象外にする
-      if (!item.startDate && !item.endDate) {
+      if (!item.categoryName) {
         continue;
       }
 
-      const dateKey = toDateKey(item.startDate ?? item.endDate ?? item.date);
-      const current = grouped.get(dateKey) ?? [];
-      current.push(item);
-      grouped.set(dateKey, current);
+      // 「期間指定なし」は日付表示の対象外にする
+      const dateKeys = getItemDateKeys(item);
+
+      if (dateKeys.length === 0) {
+        continue;
+      }
+
+      for (const dateKey of dateKeys) {
+        const current = grouped.get(dateKey) ?? [];
+        current.push(item);
+        grouped.set(dateKey, current);
+      }
     }
 
     return grouped;
@@ -132,6 +184,13 @@ const CalendarScreen = () => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
   }, []);
 
+  const handleSelectDate = useCallback((date: Date) => {
+    setSelectedDate(startOfDay(date));
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: scheduleHeaderYRef.current, animated: true });
+    });
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
       {loading ? (
@@ -143,7 +202,7 @@ const CalendarScreen = () => {
           <Text style={localStyles.stateText}>{errorMessage}</Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <Pressable style={styles.monthButton} onPress={() => moveMonth(-1)}>
               <Text style={styles.monthButtonText}>前月</Text>
@@ -180,7 +239,7 @@ const CalendarScreen = () => {
                         isSelected && styles.dayCellSelected,
                         !isCurrentMonth && styles.dayCellMuted,
                       ]}
-                      onPress={() => setSelectedDate(startOfDay(date))}
+                      onPress={() => handleSelectDate(date)}
                     >
                       <Text
                         style={[
@@ -209,7 +268,12 @@ const CalendarScreen = () => {
             ))}
           </View>
 
-          <View style={styles.scheduleHeader}>
+          <View
+            style={styles.scheduleHeader}
+            onLayout={(event) => {
+              scheduleHeaderYRef.current = event.nativeEvent.layout.y;
+            }}
+          >
             <Text style={styles.scheduleTitle}>{selectedDateKey} の予定</Text>
             <Pressable
               style={styles.todayButton}
