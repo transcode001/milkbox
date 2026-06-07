@@ -58,7 +58,7 @@ const HomeScreen = ({ navigation }: Props) => {
       <View style={styles.header}>
         <Text style={styles.title}>Tasks</Text>
         <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
-          <Text style={styles.addTaskButtonText}>Add Subtask</Text>
+        <Text style={styles.addTaskButtonText}>Add Task</Text>
         </TouchableOpacity>
       </View>
 
