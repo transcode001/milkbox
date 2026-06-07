@@ -30,7 +30,7 @@
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "concurrently": "^9.2.0",
-    "electron": "^33.0.0",
+    "electron": "^42.3.3",
     "electron-builder": "^25.1.8",
     "eslint": "^9.39.1",
     "next": "16.1.0",
