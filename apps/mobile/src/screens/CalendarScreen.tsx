@@ -143,6 +143,10 @@ const CalendarScreen = () => {
 
   const itemsByDate = useMemo(() => {
     const grouped = new Map<string, SavedItem[]>();
+    const calendarStart = getCalendarStart(visibleMonth);
+    const calendarEnd = addDays(calendarStart, 41);
+    const calendarStartKey = createDateKey(calendarStart);
+    const calendarEndKey = createDateKey(calendarEnd);
 
     for (const item of items) {
       if (!item.categoryName) {
@@ -157,6 +161,10 @@ const CalendarScreen = () => {
       }
 
       for (const dateKey of dateKeys) {
+        if (dateKey < calendarStartKey || dateKey > calendarEndKey) {
+          continue;
+        }
+
         const current = grouped.get(dateKey) ?? [];
         current.push(item);
         grouped.set(dateKey, current);
@@ -164,7 +172,7 @@ const CalendarScreen = () => {
     }
 
     return grouped;
-  }, [items]);
+  }, [items, visibleMonth]);
 
   const monthGrid = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
   const todayKey = createDateKey(new Date());
