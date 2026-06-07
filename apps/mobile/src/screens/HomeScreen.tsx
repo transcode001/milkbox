@@ -50,6 +50,9 @@ const HomeScreen = ({ navigation }: Props) => {
     return `${year}.${month}.${day}`;
   };
 
+  const hasDateRange = (item: { startDate?: string; endDate?: string }) =>
+    Boolean(item.startDate || item.endDate);
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
@@ -84,16 +87,22 @@ const HomeScreen = ({ navigation }: Props) => {
           renderItem={({ item }) => (
             <View style={styles.itemContainer}>
               <Text style={styles.itemText}>{item.text}</Text>
-              <View style={styles.itemDateRow}>
-                <View style={styles.itemDateColumn}>
-                  <Text style={styles.itemDateLabel}>開始日</Text>
-                  <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
+              {hasDateRange(item) ? (
+                <View style={styles.itemDateRow}>
+                  {item.startDate ? (
+                    <View style={styles.itemDateColumn}>
+                      <Text style={styles.itemDateLabel}>開始日</Text>
+                      <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
+                    </View>
+                  ) : null}
+                  {item.endDate ? (
+                    <View style={styles.itemDateColumn}>
+                      <Text style={styles.itemDateLabel}>終了日</Text>
+                      <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
+                    </View>
+                  ) : null}
                 </View>
-                <View style={styles.itemDateColumn}>
-                  <Text style={styles.itemDateLabel}>終了日</Text>
-                  <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
-                </View>
-              </View>
+              ) : null}
             </View>
           )}
         />
