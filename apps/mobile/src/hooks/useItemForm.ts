@@ -63,7 +63,7 @@ export const useItemForm = ({
     }
 
     if (!noCategoryChecked && !selectedOption) {
-      Alert.alert("Error", "カテゴリを選択してください");
+      Alert.alert("Error", "タスクを選択してください");
       return;
     }
 

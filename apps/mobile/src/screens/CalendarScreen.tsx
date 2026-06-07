@@ -227,7 +227,7 @@ const CalendarScreen = () => {
             {selectedItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>予定はありません</Text>
-                <Text style={styles.emptyText}>AddTask で登録した予定がここに表示されます。</Text>
+                <Text style={styles.emptyText}>AddTask で登録したサブタスクがここに表示されます。</Text>
               </View>
             ) : (
               selectedItems.map((item) => (
