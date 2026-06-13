@@ -16,13 +16,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dbManager = useDatabaseManager();
 
-  useFocusEffect(
-    useCallback(() => {
-      loadItems();
-    }, [])
-  );
-
-  const loadItems = async () => {
+  const loadItems = useCallback(async () => {
     try {
       setLoading(true);
       setErrorMessage(null);
@@ -31,11 +25,17 @@ const HomeScreen = ({ navigation }: Props) => {
 
       setSections(grouped);
     } catch (error) {
-      setErrorMessage("Failed to load items");
+      setErrorMessage("タスクの読み込みに失敗しました");
     } finally {
       setLoading(false);
     }
-  };
+  }, [dbManager]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadItems();
+    }, [loadItems])
+  );
 
   const handleNavigateAddTask = () => {
     navigation.navigate("AddTask");
@@ -46,7 +46,7 @@ const HomeScreen = ({ navigation }: Props) => {
       await dbManager.itemRepository.delete(id);
       await loadItems();
     } catch (error) {
-      Alert.alert("Error", "Failed to delete item");
+      Alert.alert("エラー", "タスクの削除に失敗しました");
     }
   };
 
@@ -78,9 +78,9 @@ const HomeScreen = ({ navigation }: Props) => {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Tasks</Text>
+        <Text style={styles.title}>タスク</Text>
         <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
-          <Text style={styles.addTaskButtonText}>Add Task</Text>
+          <Text style={styles.addTaskButtonText}>追加</Text>
         </TouchableOpacity>
       </View>
 
@@ -94,7 +94,7 @@ const HomeScreen = ({ navigation }: Props) => {
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.stateContainer}>
-          <Text style={styles.stateText}>No items yet</Text>
+          <Text style={styles.stateText}>タスクはまだありません</Text>
         </View>
       ) : (
         <SectionList
