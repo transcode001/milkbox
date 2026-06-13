@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useState } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -60,7 +60,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     setShowDeleteCategoryModal(false);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     setDateError(null);
     setCategoryError(null);
 
@@ -78,7 +78,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
     const fallbackDate = startDate ?? endDate ?? new Date();
 
-    void (async () => {
+    try {
       await dbManager.itemRepository.create({
         text: text.trim(),
         date: fallbackDate.toISOString(),
@@ -93,7 +93,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
       setActiveDateField(null);
       await loadItems();
       setShowPostSubmitModal(true);
-    })();
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to save data");
+    }
   };
 
   useEffect(() => {
@@ -368,7 +371,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 </View>
               )}
               {dateError && <Text style={styles.errorText}>{dateError}</Text>}
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={() => {
+                  void handleSubmit();
+                }}
+              >
                 <Text style={styles.buttonText}>Submit</Text>
               </TouchableOpacity>
             </View>

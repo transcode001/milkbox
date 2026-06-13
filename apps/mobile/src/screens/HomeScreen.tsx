@@ -78,7 +78,7 @@ const HomeScreen = ({ navigation }: Props) => {
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Categories</Text>
+        <Text style={styles.title}>Tasks</Text>
         <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
           <Text style={styles.addTaskButtonText}>Add Task</Text>
         </TouchableOpacity>
