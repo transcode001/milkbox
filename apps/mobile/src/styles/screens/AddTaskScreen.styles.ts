@@ -99,6 +99,44 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
+  weekdayContainer: {
+    marginTop: 12,
+  },
+  weekdayRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  weekdayHelpText: {
+    fontSize: 12,
+    color: "#666",
+    marginBottom: 8,
+  },
+  weekdayButton: {
+    minWidth: 40,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#ccc",
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    backgroundColor: "#fff",
+  },
+  weekdayButtonSelected: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  weekdayButtonDisabled: {
+    opacity: 0.45,
+  },
+  weekdayButtonText: {
+    fontSize: 14,
+    color: "#333",
+    fontWeight: "600",
+  },
+  weekdayButtonTextSelected: {
+    color: "#fff",
+  },
   button: {
     backgroundColor: "#007AFF",
     paddingVertical: 12,

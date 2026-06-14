@@ -5,6 +5,7 @@ export interface SavedItem {
   date: string;
   startDate?: string;
   endDate?: string;
+  weekdays?: string;
   categoryName?: string;
 }
 
@@ -14,6 +15,7 @@ export interface CreateItemDto {
   date: string;
   startDate?: string;
   endDate?: string;
+  weekdays?: string;
 }
 
 export interface UpdateItemDto {
