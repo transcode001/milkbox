@@ -20,6 +20,7 @@
 - **カテゴリ単位の整理**: タスクをカテゴリでグルーピングして一覧化し、見通しを改善。
 - **期間つき予定管理**: 開始日・終了日の入力、日付整合性チェック（終了日 < 開始日の防止）で入力品質を担保。
 - **カレンダー可視化**: 月表示で件数把握、日付選択で当日の予定詳細を確認。
+- **曜日繰り返し管理**: タスク（カテゴリ）ごとに曜日繰り返しのサブタスクを登録でき、カレンダー上で Gantt バーとして週単位に可視化。
 - **素早い登録フロー**: 追加後に「続けて登録」または「ホームへ戻る」を選べる導線。
 - **カテゴリ運用の柔軟性**: カテゴリ追加/削除、削除時の「関連タスクも削除」または「未分類化」に対応。
 - **クロスプラットフォーム展開**: モバイルで実用価値を作りつつ、Web/Desktop に同一ドメインを展開可能。
@@ -35,7 +36,7 @@
 - モバイル: React Native 0.81, Expo 54
 - ナビゲーション: React Navigation（bottom tabs / native stack / stack）
 - Web/Docs: Next.js 16, React 19, React DOM 19
-- Desktop: Electron 33 + Next.js レンダラー, electron-builder
+- Desktop: Electron 42 + Next.js レンダラー, electron-builder
 
 ### データ・状態管理
 - モバイル永続化: expo-sqlite（SQLite）
@@ -45,6 +46,7 @@
 ### UI/入力補助
 - @react-native-community/datetimepicker
 - @react-native-picker/picker
+- react-native-gesture-handler（Swipeable・GestureHandlerRootView）
 - ルート依存として Chakra UI / Emotion / Framer Motion（Web 系 UI 拡張の土台）
 
 ### 品質・開発体験

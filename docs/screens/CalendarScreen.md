@@ -20,12 +20,24 @@
 - `items: SavedItem[]`
   - 型: `SavedItem[]`
   - 取得元: `itemRepository.findAllWithCategory()`
-- `itemsByDate: Map<string, SavedItem[]>`
+- `rangeItems: SavedItem[]`
+  - 型: `SavedItem[]`
+  - 取得元: useMemo（startDate と endDate を持つ複数日タスク）
+- `weekdayItems: SavedItem[]`
+  - 型: `SavedItem[]`
+  - 取得元: useMemo（weekdays を持つ曜日繰り返しタスク）
+- `weekdayBarItems: SavedItem[]`
+  - 型: `SavedItem[]`
+  - 取得元: useMemo（カテゴリ単位で曜日を集約した Gantt バー表示用データ）
+- `pointItemsByDate: Map<string, SavedItem[]>`
   - 型: `Map<YYYY-MM-DD, SavedItem[]>`
-  - 取得元: `items` を日付キーで再編成（期間指定なしデータは除外）
+  - 取得元: useMemo（単日タスクを日付キーでグループ化）
+- `categoryColorMap: Map<string | undefined, number>`
+  - 型: `Map<categoryName, colorIndex>`
+  - 取得元: useMemo（カテゴリ名に対してカラーインデックスを割り当て）
 - `selectedItems: SavedItem[]`
   - 型: `SavedItem[]`
-  - 取得元: `itemsByDate.get(selectedDateKey)` を時刻順ソート
+  - 取得元: rangeItems・weekdayItems・pointItemsByDate から selectedDate に合致するものを合算して時刻順ソート
 - `loading`, `errorMessage`
   - 型: boolean / string | null
   - 取得元: 画面内 state
@@ -41,15 +53,18 @@
         - 当月ラベル
         - 次月ボタン
       - 曜日ヘッダー行
-      - カレンダー本体
+      - カレンダー本体（週ブロック単位）
         - 6週 x 7日の日付セル（Pressable）
-        - 件数ドット/件数表示
+          - 単日タスクがある日はドット表示
+        - Gantt バー表示エリア（rangeItems・weekdayBarItems を週内に配置）
+          - 週をまたぐバーは端で切れ、continuesLeft/continuesRight で角丸制御
+          - 複数バーが重なる場合はレーン分割（assignLanes）
       - 予定ヘッダー
         - 選択日タイトル
         - 今日へボタン
       - 予定リスト
         - Empty 状態
-        - 予定カード（時刻、カテゴリ、本文）
+        - 予定カード（時刻、カテゴリバッジ（カテゴリ色）、本文、期間表示または曜日表示）
 
 ## ユーザー操作
 - 月移動
@@ -84,9 +99,9 @@
 - `useFocusEffect`
   - フォーカス時に `loadItems()` 実行
 - `useMemo`
-  - `itemsByDate`（日付マップ化）
+  - `rangeItems / weekdayItems / weekdayBarItems / pointItemsByDate / categoryColorMap`（アイテム種別ごとに分類）
   - `monthGrid`（6x7カレンダー配列）
-  - `selectedItems`（対象日抽出と時刻ソート）
+  - `selectedItems`（選択日に合致するアイテムを全種別から集約して時刻ソート）
 - Context
   - `useDatabaseManager()` で repository 利用
 
@@ -94,7 +109,10 @@
 - 入力バリデーション
   - 入力フォームはなく、明示的バリデーションはなし
 - データ整形ルール
-  - `startDate`/`endDate` がないデータ（期間指定なし）はカレンダー表示対象外
+  - カテゴリ指定なし（noCategoryChecked）で startDate/endDate が両方ないデータはカレンダー表示対象外
+  - カテゴリ指定あり（曜日モード）のデータは weekdays に基づき Gantt バーに表示
+  - rangeItems は startDate〜endDate の範囲にわたって表示
+  - pointItemsByDate は startDate（なければ endDate）の単日に表示
   - 時刻表示は `ja-JP` ロケールで整形、日付のみの値は `終日` 表示
 - エラー表示
   - 読込失敗時に `errorMessage = "予定の読み込みに失敗しました"` を表示
@@ -114,6 +132,10 @@
 - 表示時刻は `startDate` 優先、次に `endDate`、最後に `date` を参照する優先順位で決まる。
 - 日付文字列に時刻が含まれない場合は「終日」扱いとして表示する。
 - 選択日内の予定は時刻昇順で並べる。
+- カテゴリ色はカテゴリ名を hashColorIdx でハッシュ化し、BAR_COLORS（7色）の中から自動割り当てされる。
+- 週をまたぐ Gantt バーは週末/週頭で切り、continuesLeft/Right フラグで視覚的な連続性を表現する。
+- Gantt バーが同一週内で重なる場合は assignLanes アルゴリズムでレーンを分割して描画する。
+- 選択日の予定リストには rangeItems（期間内）・weekdayItems（曜日一致）・pointItems（単日一致）の全種別が合算表示される。
 
 4. 将来的に追加予定の機能
 - README の `Scheduler pairing (planned)` に沿って、外部カレンダーとの同期表示・双方向更新が追加される可能性がある。
@@ -121,6 +143,6 @@
 
 5. 他画面との関係・遷移フローで特記すべきこと
 - データ入力は AddTask が担い、Calendar は可視化に特化した役割分担。
-- AddTask で日付付き登録した項目のみ Calendar に反映されるため、両画面で見える件数が一致しない場合がある。
+- AddTask でカテゴリ指定あり（曜日モード）で登録したサブタスクは Gantt バーに表示される。カテゴリ指定なし（日付モード）で開始日/終了日のないサブタスクはカレンダーに出ないため、両画面の件数が一致しない場合がある。
 - 画面フォーカス時に再読込するため、他画面で更新後に Calendar を開くと最新状態になる。
 ---
