@@ -1,4 +1,3 @@
----
 # AddTaskScreen 画面仕様
 
 ## 概要
@@ -139,7 +138,7 @@
 
 ## バリデーション・エラー
 - バリデーション
-  - 本文必須: 空文字は `Please enter some text`
+  - 本文必須: 空文字は登録不可（テキスト入力必須）
   - 日付整合性: noCategoryChecked が ON の場合のみチェック。`isEndDateBeforeStartDate(startDate, endDate)` が true なら登録不可
   - 曜日選択必須: noCategoryChecked が OFF の場合、effectiveWeekdays が空なら登録不可
   - カテゴリ選択必須: 未指定チェック OFF かつ未選択時は登録不可
@@ -180,4 +179,3 @@
 - 登録後ダイアログで「続けて登録」または「ホームへ戻る」を選べるため、連続投入と一覧確認の2導線を用意している。
 - AddTask での登録・削除・カテゴリ変更は Home のカテゴリ一覧と Calendar の予定表示に反映される。
 - Calendar 側では、カテゴリ指定あり（曜日モード）のサブタスクは Gantt バー表示の対象になる。カテゴリ指定なし（日付モード）のサブタスクで開始日/終了日が未設定のものはカレンダーに出ない。
----
