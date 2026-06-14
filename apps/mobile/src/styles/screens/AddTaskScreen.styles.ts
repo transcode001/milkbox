@@ -285,6 +285,12 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: 16,
   },
+  modalMessage: {
+    fontSize: 14,
+    color: "#333",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
   modalInput: {
     borderWidth: 1,
     borderColor: "#ccc",
@@ -298,6 +304,9 @@ export const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 12,
   },
+  modalActionStack: {
+    gap: 8,
+  },
   modalButton: {
     flex: 1,
     paddingVertical: 12,
@@ -309,6 +318,9 @@ export const styles = StyleSheet.create({
   },
   modalButtonSubmit: {
     backgroundColor: "#007AFF",
+  },
+  modalButtonDanger: {
+    backgroundColor: "#dc3545",
   },
   modalButtonText: {
     color: "#fff",
@@ -330,5 +342,11 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
     paddingVertical: 12,
+  },
+  errorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: "#dc3545",
+    fontWeight: "500",
   },
 });

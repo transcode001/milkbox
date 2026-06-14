@@ -1,9 +1,9 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import type { Category } from "../repositories/sqlite/CategoryRepository";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 
-type DeleteCategoryMode = "delete" | "uncategorize";
+export type DeleteCategoryMode = "delete" | "uncategorize";
 
 export interface UseCategoryParams {
   dbManager: DatabaseManager;
@@ -12,17 +12,19 @@ export interface UseCategoryParams {
 export interface UseCategoryResult {
   categories: Category[];
   selectedOption: string;
+  selectedCategoryName: string;
   noCategoryChecked: boolean;
   showAddCategoryModal: boolean;
+  showDeleteCategoryModal: boolean;
   newCategoryName: string;
   setSelectedOption: React.Dispatch<React.SetStateAction<string>>;
   setNoCategoryChecked: React.Dispatch<React.SetStateAction<boolean>>;
   setShowAddCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowDeleteCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
   setNewCategoryName: React.Dispatch<React.SetStateAction<string>>;
   loadCategories: () => Promise<void>;
   handleAddCategory: () => Promise<void>;
   handleDeleteCategory: (mode: DeleteCategoryMode, loadItems: () => Promise<void>) => Promise<void>;
-  showDeleteCategoryDialog: (loadItems: () => Promise<void>) => void;
 }
 
 export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult => {
@@ -31,6 +33,12 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   const [noCategoryChecked, setNoCategoryChecked] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
+
+  const selectedCategoryName = useMemo(() => {
+    const current = categories.find((category) => category.id.toString() === selectedOption);
+    return current?.name ?? "このカテゴリ";
+  }, [categories, selectedOption]);
 
   const loadCategories = useCallback(async () => {
     try {
@@ -71,7 +79,6 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   const handleDeleteCategory = useCallback(
     async (mode: DeleteCategoryMode, loadItems: () => Promise<void>) => {
       if (!selectedOption) {
-        Alert.alert("Error", "削除するカテゴリを選択してください");
         return;
       }
 
@@ -87,7 +94,6 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         await dbManager.categoryRepository.delete(categoryId);
         setSelectedOption("");
         await Promise.all([loadCategories(), loadItems()]);
-        Alert.alert("Success", "カテゴリを削除しました");
       } catch (error) {
         Alert.alert("Error", "カテゴリの削除に失敗しました");
       }
@@ -95,56 +101,21 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
     [dbManager, loadCategories, selectedOption],
   );
 
-  const showDeleteCategoryDialog = useCallback(
-    (loadItems: () => Promise<void>) => {
-      if (!selectedOption) {
-        Alert.alert("Error", "削除するカテゴリを選択してください");
-        return;
-      }
-
-      const currentCategory = categories.find((category) => category.id.toString() === selectedOption);
-      const categoryName = currentCategory?.name ?? "このカテゴリ";
-
-      Alert.alert(
-        "カテゴリを削除",
-        `「${categoryName}」を削除します。\n登録済みの内容をどうしますか？`,
-        [
-          {
-            text: "削除",
-            style: "destructive",
-            onPress: () => {
-              void handleDeleteCategory("delete", loadItems);
-            },
-          },
-          {
-            text: "未分類",
-            onPress: () => {
-              void handleDeleteCategory("uncategorize", loadItems);
-            },
-          },
-          {
-            text: "キャンセル",
-            style: "cancel",
-          },
-        ],
-      );
-    },
-    [categories, handleDeleteCategory, selectedOption],
-  );
-
   return {
     categories,
     selectedOption,
+    selectedCategoryName,
     noCategoryChecked,
     showAddCategoryModal,
+    showDeleteCategoryModal,
     newCategoryName,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
+    setShowDeleteCategoryModal,
     setNewCategoryName,
     loadCategories,
     handleAddCategory,
     handleDeleteCategory,
-    showDeleteCategoryDialog,
   };
 };

@@ -1,15 +1,16 @@
-import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import type { RootTabParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
-import { useCategory } from "../hooks/useCategory";
+import { DeleteCategoryMode, useCategory } from "../hooks/useCategory";
 import { useDatePicker } from "../hooks/useDatePicker";
 import { useItemForm } from "../hooks/useItemForm";
+import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 
 type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
 
@@ -20,16 +21,19 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const {
     categories,
     selectedOption,
+    selectedCategoryName,
     noCategoryChecked,
     showAddCategoryModal,
+    showDeleteCategoryModal,
     newCategoryName,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
+    setShowDeleteCategoryModal,
     setNewCategoryName,
     loadCategories,
     handleAddCategory,
-    showDeleteCategoryDialog,
+    handleDeleteCategory,
   } = useCategory({ dbManager });
   const {
     startDate,
@@ -43,17 +47,57 @@ const AddTaskScreen = ({ navigation }: Props) => {
     clearDate,
     formatDate,
   } = useDatePicker();
-  const { text, items, setText, loadItems, handleSubmit, deleteItem } = useItemForm({
-    dbManager,
-    selectedOption,
-    noCategoryChecked,
-    startDate,
-    endDate,
-    setStartDate,
-    setEndDate,
-    setActiveDateField,
-    onNavigateHome: () => navigation.navigate("Home"),
-  });
+  const { text, items, setText, loadItems, deleteItem } = useItemForm({ dbManager });
+  const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
+  const [dateError, setDateError] = useState<string | null>(null);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+
+  const handleDeleteCategoryConfirm = (mode: DeleteCategoryMode) => {
+    if (selectedOption) {
+      void handleDeleteCategory(mode, loadItems);
+      setSelectedOption("");
+    }
+    setShowDeleteCategoryModal(false);
+  };
+
+  const handleSubmit = async () => {
+    setDateError(null);
+    setCategoryError(null);
+
+    if (!text.trim()) return;
+
+    if (isEndDateBeforeStartDate(startDate, endDate)) {
+      setDateError("終了日が開始日より前です。終了日を再設定してください。");
+      return;
+    }
+
+    if (!noCategoryChecked && !selectedOption) {
+      setCategoryError("カテゴリを選択してください");
+      return;
+    }
+
+    const fallbackDate = startDate ?? endDate ?? new Date();
+
+    try {
+      await dbManager.itemRepository.create({
+        text: text.trim(),
+        date: fallbackDate.toISOString(),
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString(),
+        categoryId: noCategoryChecked ? undefined : Number(selectedOption),
+      });
+
+      setText("");
+      setStartDate(null);
+      setEndDate(null);
+      setActiveDateField(null);
+      await loadItems();
+      setShowPostSubmitModal(true);
+    } catch (error) {
+      console.error(error);
+      Alert.alert("Error", "Failed to save data");
+    }
+  };
 
   useEffect(() => {
     const initDatabase = async () => {
@@ -66,6 +110,72 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Modal
+        visible={showPostSubmitModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>登録完了</Text>
+            <Text style={styles.modalMessage}>続けて予定を登録しますか？</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                onPress={() => setShowPostSubmitModal(false)}
+                style={[styles.modalButton, styles.modalButtonCancel]}
+              >
+                <Text style={styles.modalButtonText}>続けて登録する</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowPostSubmitModal(false);
+                  navigation.navigate("Home");
+                }}
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+              >
+                <Text style={styles.modalButtonText}>ホームへ戻る</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showDeleteCategoryModal}
+        transparent={true}
+        animationType="fade"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>カテゴリを削除</Text>
+            <Text style={styles.modalMessage}>
+              「{selectedCategoryName}」を削除します。{"\n"}
+              登録済みの内容をどうしますか？
+            </Text>
+            <View style={styles.modalActionStack}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDanger]}
+                onPress={() => handleDeleteCategoryConfirm("delete")}
+              >
+                <Text style={styles.modalButtonText}>削除（アイテムも削除）</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSubmit]}
+                onPress={() => handleDeleteCategoryConfirm("uncategorize")}
+              >
+                <Text style={styles.modalButtonText}>未分類（アイテムを残す）</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteCategoryModal(false)}
+              >
+                <Text style={styles.modalButtonText}>キャンセル</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <Modal
         visible={showAddCategoryModal}
         transparent={true}
@@ -136,8 +246,13 @@ const AddTaskScreen = ({ navigation }: Props) => {
                       styles.removeCategoryButton,
                       !selectedOption && styles.removeCategoryButtonDisabled,
                     ]}
-                    onPress={() => showDeleteCategoryDialog(loadItems)}
-                    disabled={!selectedOption}
+                    onPress={() => {
+                      if (!selectedOption) {
+                        setCategoryError("削除するカテゴリを選択してください");
+                        return;
+                      }
+                      setShowDeleteCategoryModal(true);
+                    }}
                   >
                     <Text style={styles.removeCategoryButtonText}>削除</Text>
                   </TouchableOpacity>
@@ -146,7 +261,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
               <TouchableOpacity
                 style={styles.checkboxRow}
-                onPress={() => setNoCategoryChecked((prev) => !prev)}
+                onPress={() => {
+                  setNoCategoryChecked((prev) => !prev);
+                  setCategoryError(null);
+                }}
                 activeOpacity={0.8}
               >
                 <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
@@ -157,7 +275,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
               <Picker
                 selectedValue={selectedOption}
-                onValueChange={(itemValue) => setSelectedOption(itemValue)}
+                onValueChange={(itemValue) => {
+                  setSelectedOption(itemValue);
+                  setCategoryError(null);
+                }}
                 enabled={!noCategoryChecked}
                 style={[styles.picker, noCategoryChecked && styles.pickerDisabled]}
                 itemStyle={styles.pickerItem}
@@ -170,6 +291,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   />
                 ))}
               </Picker>
+              {categoryError && <Text style={styles.errorText}>{categoryError}</Text>}
             </View>
 
                 <View style={styles.formContainer}>
@@ -248,7 +370,13 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   )}
                 </View>
               )}
-              <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
+              {dateError && <Text style={styles.errorText}>{dateError}</Text>}
+              <TouchableOpacity
+                style={styles.submitButton}
+                onPress={() => {
+                  void handleSubmit();
+                }}
+              >
                 <Text style={styles.buttonText}>Submit</Text>
               </TouchableOpacity>
             </View>
