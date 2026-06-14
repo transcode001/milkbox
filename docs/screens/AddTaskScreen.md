@@ -1,4 +1,3 @@
----
 # AddTaskScreen 画面仕様
 
 ## 概要
@@ -35,6 +34,15 @@
 - `activeDateField`
   - 型: "start" | "end" | null
   - 取得元: DatePicker 表示制御 state
+- `selectedWeekdays`
+  - 型: number[]
+  - 取得元: 画面内 state（ユーザーが手動選択した曜日インデックス 0〜6）
+- `inheritedWeekdays`
+  - 型: number[]
+  - 取得元: useMemo（同カテゴリの既存サブタスクから集約した曜日セット）
+- `effectiveWeekdays`
+  - 型: number[]
+  - 取得元: inheritedWeekdays が存在する場合はそれを使用、なければ selectedWeekdays を使用
 
 ## UI 構成
 - SafeAreaView
@@ -50,8 +58,8 @@
           - Picker
         - タスク入力フォーム
           - 本文 TextInput
-          - 開始日/終了日セレクタ
-          - DateTimePicker（表示時）
+          - noCategoryChecked ON の場合: 開始日/終了日セレクタ + DateTimePicker（表示時）
+          - noCategoryChecked OFF の場合: 曜日選択ボタン（日〜土の7つのトグルボタン）
           - Submit ボタン
         - Saved Items 件数表示
       - SectionHeader（カテゴリ名）
@@ -77,7 +85,17 @@
   - 遷移先: なし
 - カテゴリ未指定切替
   - トリガー: チェックボックス行タップ
-  - 処理内容: `noCategoryChecked` 切替、Picker 無効化/有効化
+  - 処理内容: `noCategoryChecked` 切替
+    - ON にした場合: `selectedWeekdays` をリセット
+    - OFF にした場合: `startDate`・`endDate`・`activeDateField` をリセット
+  - 遷移先: なし
+- カテゴリ切り替え
+  - トリガー: Picker でカテゴリを変更
+  - 処理内容: `selectedOption` 更新、`selectedWeekdays`・日付 state・エラー state をリセット
+  - 遷移先: なし
+- 曜日トグル
+  - トリガー: 曜日ボタンタップ（noCategoryChecked が OFF の場合に表示）
+  - 処理内容: `toggleWeekday(weekday)` で selectedWeekdays を更新
   - 遷移先: なし
 - 日付設定/クリア
   - トリガー: 開始日/終了日の設定ボタン、クリアボタン
@@ -107,8 +125,12 @@
   - `text`, `items`, `selectedOption`, `noCategoryChecked`, `categories`
   - `showAddCategoryModal`, `newCategoryName`
   - `startDate`, `endDate`, `activeDateField`
+  - `selectedWeekdays`: 手動選択した曜日インデックス配列
+- `useMemo`
+  - `inheritedWeekdays`: 同カテゴリの既存サブタスクから曜日を集約
 - `useEffect`
-  - 初回マウント時に `initDatabase()` 実行（カテゴリ・一覧読込）
+  - 初回マウントで `loadCategories()` + `loadItems()` を実行
+    （`initDatabase()` は DatabaseContext 側で管理するため不要）
 - Context
   - `useDatabaseManager()` で item/category repository を利用
 - レスポンシブ分岐
@@ -116,12 +138,15 @@
 
 ## バリデーション・エラー
 - バリデーション
-  - 本文必須: 空文字は `Please enter some text`
-  - 日付整合性: `isEndDateBeforeStartDate(startDate, endDate)` が true の場合は登録不可
+  - 本文必須: 空文字は登録不可（テキスト入力必須）
+  - 日付整合性: noCategoryChecked が ON の場合のみチェック。`isEndDateBeforeStartDate(startDate, endDate)` が true なら登録不可
+  - 曜日選択必須: noCategoryChecked が OFF の場合、effectiveWeekdays が空なら登録不可
   - カテゴリ選択必須: 未指定チェック OFF かつ未選択時は登録不可
   - カテゴリ名必須: 空文字でカテゴリ追加不可
 - エラー表示
-  - DB 読込/保存/削除失敗時は `Alert.alert` でエラーダイアログ表示
+  - 日付・曜日エラーはフォーム内に `dateError` としてインライン表示
+  - カテゴリ未選択エラーはフォーム内に `categoryError` としてインライン表示
+  - DB 操作失敗時は `Alert.alert` でエラーダイアログ表示
 - 成功通知
   - 登録成功、カテゴリ追加成功、カテゴリ削除成功時も `Alert.alert` で通知
 
@@ -141,6 +166,9 @@
 - カテゴリ未指定チェックが ON の間はカテゴリ Picker を無効化し、入力矛盾を防ぐ。
 - 登録時の `date` は必須のため、開始日/終了日未設定でも内部的に現在日時を補完して保存する。
 - 終了日が開始日より前の入力は保存不可（入力時点で弾く）。
+- サブタスク登録時にカテゴリを選択した場合、同カテゴリの既存サブタスクから曜日を継承する（inheritedWeekdays）。
+- noCategoryChecked の ON/OFF 切り替え時に、モードに応じて関連 state（曜日 or 日付）がリセットされる。
+- カテゴリを変更した場合も selectedWeekdays と日付 state がリセットされ、前カテゴリの選択が持ち越されない。
 
 4. 将来的に追加予定の機能
 - リポジトリ全体の README に `Scheduler pairing (planned)` があり、外部スケジューラ連携の追加が想定される。
@@ -150,5 +178,4 @@
 - 基本フローは Home → AddTask（登録）→ Home。
 - 登録後ダイアログで「続けて登録」または「ホームへ戻る」を選べるため、連続投入と一覧確認の2導線を用意している。
 - AddTask での登録・削除・カテゴリ変更は Home のカテゴリ一覧と Calendar の予定表示に反映される。
-- Calendar 側では開始日/終了日のないデータを表示対象外にしているため、AddTask で日付未設定登録した項目はカレンダーには出ない。
----
+- Calendar 側では、カテゴリ指定あり（曜日モード）のサブタスクは Gantt バー表示の対象になる。カテゴリ指定なし（日付モード）のサブタスクで開始日/終了日が未設定のものはカレンダーに出ない。
