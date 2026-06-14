@@ -27,6 +27,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       date: data.date,
       startDate: data.startDate,
       endDate: data.endDate,
+      weekdays: data.weekdays,
     };
     items.unshift(newItem);
     await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));

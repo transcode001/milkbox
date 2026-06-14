@@ -19,6 +19,7 @@ export class SQLiteItemRepository implements IItemRepository {
         date TEXT NOT NULL,
         startDate TEXT,
         endDate TEXT,
+        weekdays TEXT,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -30,6 +31,11 @@ export class SQLiteItemRepository implements IItemRepository {
 
     const tableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
     const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
+    const weekdaysColumn = tableInfo.find((column) => column.name === 'weekdays');
+
+    if (!weekdaysColumn) {
+      await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
+    }
 
     // Migrate older table definitions where categoryId was NOT NULL.
     if (categoryIdColumn?.notnull === 1) {
@@ -42,10 +48,11 @@ export class SQLiteItemRepository implements IItemRepository {
           date TEXT NOT NULL,
           startDate TEXT,
           endDate TEXT,
+          weekdays TEXT,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
-        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate)
-        SELECT id, categoryId, text, date, startDate, endDate FROM items;
+        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays)
+        SELECT id, categoryId, text, date, startDate, endDate, weekdays FROM items;
         DROP TABLE items;
         ALTER TABLE items_new RENAME TO items;
         COMMIT;
@@ -76,6 +83,7 @@ export class SQLiteItemRepository implements IItemRepository {
         items.date,
         items.startDate,
         items.endDate,
+        items.weekdays,
         categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
@@ -95,8 +103,15 @@ export class SQLiteItemRepository implements IItemRepository {
   async create(data: CreateItemDto): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
     const result = await this.db.runAsync(
-      'INSERT INTO items (categoryId, text, date, startDate, endDate) VALUES (?, ?, ?, ?, ?)',
-      [data.categoryId ?? null, data.text, data.date, data.startDate ?? null, data.endDate ?? null]
+      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        data.categoryId ?? null,
+        data.text,
+        data.date,
+        data.startDate ?? null,
+        data.endDate ?? null,
+        data.weekdays ?? null,
+      ]
     );
     return {
       id: result.lastInsertRowId,
@@ -105,6 +120,7 @@ export class SQLiteItemRepository implements IItemRepository {
       date: data.date,
       startDate: data.startDate,
       endDate: data.endDate,
+      weekdays: data.weekdays,
     };
   }
 
