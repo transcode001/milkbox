@@ -5,7 +5,7 @@ export interface CategorySection {
   data: SavedItem[];
 }
 
-const UNCATEGORIZED_LABEL = "期間指定なし";
+const UNCATEGORIZED_LABEL = "タスク指定なし";
 
 export const groupByCategory = (items: SavedItem[]): CategorySection[] => {
   const sections = new Map<string, SavedItem[]>();

@@ -11,6 +11,7 @@ import { DeleteCategoryMode, useCategory } from "../hooks/useCategory";
 import { useDatePicker } from "../hooks/useDatePicker";
 import { useItemForm } from "../hooks/useItemForm";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
 type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
 
@@ -23,42 +24,6 @@ const WEEKDAY_OPTIONS = [
   { value: 5, label: "金" },
   { value: 6, label: "土" },
 ] as const;
-
-const formatWeekdayLabels = (value?: string): string | null => {
-  if (!value) return null;
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return null;
-
-    const labels = parsed
-      .filter(
-        (weekday): weekday is number =>
-          typeof weekday === "number" && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6,
-      )
-      .map((weekday) => WEEKDAY_OPTIONS[weekday].label);
-
-    return labels.length > 0 ? `毎週 ${labels.join("・")}` : null;
-  } catch {
-    return null;
-  }
-};
-
-const parseWeekdays = (value?: string): number[] => {
-  if (!value) return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      (weekday): weekday is number =>
-        typeof weekday === "number" && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6,
-    );
-  } catch {
-    return [];
-  }
-};
 
 const AddTaskScreen = ({ navigation }: Props) => {
   const { width } = useWindowDimensions();
@@ -138,19 +103,21 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
     if (!text.trim()) return;
 
-    if (noCategoryChecked && isEndDateBeforeStartDate(startDate, endDate)) {
-      setDateError("終了日が開始日より前です。終了日を再設定してください。");
-      return;
-    }
-
     if (!noCategoryChecked && !selectedOption) {
       setCategoryError("カテゴリを選択してください");
       return;
     }
 
-    if (!noCategoryChecked && effectiveWeekdays.length === 0) {
-      setDateError("曜日を1つ以上選択してください。");
-      return;
+    if (noCategoryChecked) {
+      if (isEndDateBeforeStartDate(startDate, endDate)) {
+        setDateError("終了日が開始日より前です。終了日を再設定してください。");
+        return;
+      }
+    } else {
+      if (effectiveWeekdays.length === 0) {
+        setDateError("曜日を1つ以上選択してください。");
+        return;
+      }
     }
 
     const fallbackDate = noCategoryChecked ? startDate ?? endDate ?? new Date() : new Date();
@@ -368,9 +335,11 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 onValueChange={(itemValue) => {
                   setSelectedOption(itemValue);
                   setCategoryError(null);
+                  setDateError(null);
                   setStartDate(null);
                   setEndDate(null);
                   setActiveDateField(null);
+                  setSelectedWeekdays([]);
                 }}
                 enabled={!noCategoryChecked}
                 style={[styles.picker, noCategoryChecked && styles.pickerDisabled]}

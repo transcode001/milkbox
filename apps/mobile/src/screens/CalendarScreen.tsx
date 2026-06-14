@@ -13,6 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
+import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
 const BAR_COLORS = [
   { bg: "#3B82F6", text: "#ffffff", light: "#DBEAFE", lightText: "#1D4ED8" },
@@ -103,26 +104,6 @@ function isMultiDayRange(item: SavedItem): boolean {
   const e = parseItemDate(item.endDate);
   if (!s || !e) return false;
   return s.getTime() !== e.getTime();
-}
-
-function parseWeekdays(value?: string): number[] {
-  if (!value) return [];
-
-  try {
-    const parsed = JSON.parse(value);
-    if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (weekday): weekday is number =>
-        typeof weekday === "number" && Number.isInteger(weekday) && weekday >= 0 && weekday <= 6,
-    );
-  } catch {
-    return [];
-  }
-}
-
-function formatWeekdays(value?: string): string {
-  const weekdays = parseWeekdays(value);
-  return weekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join("・");
 }
 
 function hashColorIdx(key: string | undefined): number {
@@ -533,7 +514,7 @@ const CalendarScreen = () => {
                       </Text>
                     ) : item.weekdays ? (
                       <Text style={localStyles.rangeDateText}>
-                        毎週 {formatWeekdays(item.weekdays)}
+                        {formatWeekdayLabels(item.weekdays)}
                       </Text>
                     ) : null}
                   </View>
