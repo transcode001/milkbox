@@ -37,7 +37,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
 
   const selectedCategoryName = useMemo(() => {
     const current = categories.find((category) => category.id.toString() === selectedOption);
-    return current?.name ?? "このカテゴリ";
+    return current?.name ?? "このタスク";
   }, [categories, selectedOption]);
 
   const loadCategories = useCallback(async () => {
@@ -95,7 +95,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         setSelectedOption("");
         await Promise.all([loadCategories(), loadItems()]);
       } catch (error) {
-        Alert.alert("Error", "カテゴリの削除に失敗しました");
+        Alert.alert("Error", "タスクの削除に失敗しました");
       }
     },
     [dbManager, loadCategories, selectedOption],

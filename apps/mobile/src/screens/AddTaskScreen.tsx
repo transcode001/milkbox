@@ -104,7 +104,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     if (!text.trim()) return;
 
     if (!noCategoryChecked && !selectedOption) {
-      setCategoryError("カテゴリを選択してください");
+      setCategoryError("タスクを選択してください");
       return;
     }
 
@@ -193,7 +193,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>カテゴリを削除</Text>
+            <Text style={styles.modalTitle}>タスクを削除</Text>
             <Text style={styles.modalMessage}>
               「{selectedCategoryName}」を削除します。{"\n"}
               登録済みの内容をどうしますか？
@@ -229,12 +229,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>新しいカテゴリを追加</Text>
+            <Text style={styles.modalTitle}>新しいタスクを追加</Text>
             <TextInput
               style={styles.modalInput}
               value={newCategoryName}
               onChangeText={setNewCategoryName}
-              placeholder="カテゴリ名を入力"
+              placeholder="タスク名を入力"
               returnKeyType="done"
               onSubmitEditing={() => {
                 Keyboard.dismiss();
@@ -279,7 +279,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
               <>
             <View style={styles.pickerContainer}>
               <View style={styles.pickerHeader}>
-                <Text style={styles.pickerLabel}>カテゴリを選択:</Text>
+                <Text style={styles.pickerLabel}>タスクを選択:</Text>
                 <View style={styles.pickerActions}>
                   <TouchableOpacity
                     style={styles.addCategoryButton}
@@ -294,7 +294,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     ]}
                     onPress={() => {
                       if (!selectedOption) {
-                        setCategoryError("削除するカテゴリを選択してください");
+                        setCategoryError("削除するタスクを選択してください");
                         return;
                       }
                       setShowDeleteCategoryModal(true);
@@ -327,7 +327,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
                   {noCategoryChecked ? <Text style={styles.checkboxMark}>✓</Text> : null}
                 </View>
-                <Text style={styles.checkboxLabel}>カテゴリ指定しない</Text>
+                <Text style={styles.checkboxLabel}>タスク指定しない</Text>
               </TouchableOpacity>
 
               <Picker
@@ -441,7 +441,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   <Text style={styles.dateLabel}>曜日</Text>
                   {inheritedWeekdays.length > 0 ? (
                     <Text style={styles.weekdayHelpText}>
-                      このカテゴリの登録済み曜日（{formatWeekdayLabels(JSON.stringify(inheritedWeekdays))}）を引き継ぎます。
+                      このタスクの登録済み曜日（{formatWeekdayLabels(JSON.stringify(inheritedWeekdays))}）を引き継ぎます。
                     </Text>
                   ) : null}
                   <View style={styles.weekdayRow}>
