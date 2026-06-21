@@ -226,7 +226,7 @@ const CalendarScreen = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const scheduleHeaderYRef = useRef(0);
-  const dbManager = useDatabaseManager();
+  const { dbManager } = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
     try {

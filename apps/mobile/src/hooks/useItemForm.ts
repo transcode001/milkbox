@@ -33,7 +33,7 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
   const deleteItem = useCallback(
     async (id: number) => {
       try {
-        await dbManager.itemRepository.delete(id);
+        await dbManager.deleteItem(id);
         await loadItems();
       } catch (error) {
         Alert.alert("Error", "Failed to delete data");

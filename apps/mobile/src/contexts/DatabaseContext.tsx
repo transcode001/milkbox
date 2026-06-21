@@ -1,9 +1,11 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
+import { initializeNotificationsAsync } from "../services/notifications";
 
 interface DatabaseContextValue {
   dbManager: DatabaseManager;
+  notificationsEnabled: boolean;
 }
 
 const DatabaseContext = createContext<DatabaseContextValue | undefined>(undefined);
@@ -13,6 +15,7 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
   const [dbManager] = useState(() => new DatabaseManager());
   const [isInitialized, setIsInitialized] = useState(false);
   const [initError, setInitError] = useState<Error | null>(null);
+  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
@@ -44,7 +47,24 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
     };
   }, [dbManager]);
 
-  const value = useMemo(() => ({ dbManager }), [dbManager]);
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const initializeNotificationReminders = async () => {
+      const hasPermission = await initializeNotificationsAsync();
+      setNotificationsEnabled(hasPermission);
+      if (hasPermission) {
+        await dbManager.syncTaskNotifications();
+      }
+    };
+
+    void initializeNotificationReminders();
+  }, [dbManager, isInitialized]);
+
+  const value = useMemo(
+    () => ({ dbManager, notificationsEnabled }),
+    [dbManager, notificationsEnabled],
+  );
 
   if (initError) {
     throw initError;
@@ -57,12 +77,12 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
   return <DatabaseContext.Provider value={value}>{children}</DatabaseContext.Provider>;
 };
 
-export const useDatabaseManager = (): DatabaseManager => {
+export const useDatabaseManager = (): DatabaseContextValue => {
   const context = useContext(DatabaseContext);
 
   if (!context) {
     throw new Error("useDatabaseManager must be used within a DatabaseProvider");
   }
 
-  return context.dbManager;
+  return context;
 };

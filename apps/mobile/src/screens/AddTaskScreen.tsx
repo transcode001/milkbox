@@ -28,7 +28,7 @@ const WEEKDAY_OPTIONS = [
 const AddTaskScreen = ({ navigation }: Props) => {
   const { width } = useWindowDimensions();
   const isNarrowScreen = width < 360;
-  const dbManager = useDatabaseManager();
+  const { dbManager } = useDatabaseManager();
   const {
     categories,
     selectedOption,
@@ -123,7 +123,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     const fallbackDate = noCategoryChecked ? startDate ?? endDate ?? new Date() : new Date();
 
     try {
-      await dbManager.itemRepository.create({
+      await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
         startDate: noCategoryChecked ? startDate?.toISOString() : undefined,

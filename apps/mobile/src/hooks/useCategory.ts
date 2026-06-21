@@ -86,7 +86,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
 
       try {
         if (mode === "delete") {
-          await dbManager.itemRepository.deleteByCategoryId(categoryId);
+          await dbManager.deleteItemsByCategoryId(categoryId);
         } else {
           await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
         }

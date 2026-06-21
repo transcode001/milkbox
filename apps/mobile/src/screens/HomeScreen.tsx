@@ -14,7 +14,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const dbManager = useDatabaseManager();
+  const { dbManager, notificationsEnabled } = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
     try {
@@ -43,7 +43,7 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleDeleteItem = async (id: number) => {
     try {
-      await dbManager.itemRepository.delete(id);
+      await dbManager.deleteItem(id);
       await loadItems();
     } catch (error) {
       Alert.alert("エラー", "タスクの削除に失敗しました");
@@ -83,6 +83,14 @@ const HomeScreen = ({ navigation }: Props) => {
           <Text style={styles.addTaskButtonText}>追加</Text>
         </TouchableOpacity>
       </View>
+
+      {!notificationsEnabled && (
+        <View style={styles.notificationWarning}>
+          <Text style={styles.notificationWarningText}>
+            通知が許可されていません。端末の設定からMilkboxの通知を有効にしてください。
+          </Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.stateContainer}>
@@ -154,6 +162,18 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: "700",
     marginBottom: 10,
+  },
+  notificationWarning: {
+    backgroundColor: "#FFF8D6",
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0E2A0",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  notificationWarningText: {
+    color: "#666",
+    fontSize: 12,
+    lineHeight: 18,
   },
   addTaskButton: {
     backgroundColor: "#007AFF",
