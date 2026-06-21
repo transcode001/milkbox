@@ -10,6 +10,12 @@
     "dev:mobile:android": "turbo run dev:android --filter=mobile",
     "dev:web": "turbo run dev --filter=web",
     "dev:docs": "turbo run dev --filter=docs",
+    "build:mobile:android:apk": "cd apps/mobile && pnpm dlx eas-cli build --platform android --profile android-apk",
+    "build:mobile:android:store": "cd apps/mobile && pnpm dlx eas-cli build --platform android --profile android-store",
+    "build:mobile:ios:simulator": "cd apps/mobile && pnpm dlx eas-cli build --platform ios --profile ios-simulator",
+    "build:mobile:ios:device": "cd apps/mobile && pnpm dlx eas-cli build --platform ios --profile ios-device",
+    "build:mobile:ios:store": "cd apps/mobile && pnpm dlx eas-cli build --platform ios --profile ios-store",
+    "build:mobile:store": "cd apps/mobile && pnpm dlx eas-cli build --platform all --profile store",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "check-types": "turbo run check-types"
