@@ -6,6 +6,7 @@ import {
   cancelAllTaskNotificationsAsync,
   cancelTaskNotificationsAsync,
   scheduleTaskNotificationsAsync,
+  shouldScheduleNotification,
 } from '../../services/notifications';
 
 export class DatabaseManager {
@@ -42,6 +43,9 @@ export class DatabaseManager {
     return item;
   }
 
+  // 注意: タスク編集機能を実装する場合、itemRepository.update() を直接呼ばずに
+  // 必ず DatabaseManager.updateItem() を使用すること。
+  // updateItem() は更新後に通知の再スケジュール（scheduleTaskNotificationsAsync）まで行う。
   async updateItem(id: number, data: UpdateItemDto): Promise<void> {
     await this.itemRepository.update(id, data);
     const item = await this.itemRepository.findById(id);
@@ -67,9 +71,10 @@ export class DatabaseManager {
 
   async syncTaskNotifications(): Promise<void> {
     const items = await this.itemRepository.findAll();
+    const targets = items.filter((item) => shouldScheduleNotification(item));
 
-    for (const item of items) {
-      await scheduleTaskNotificationsAsync(item);
-    }
+    await Promise.all(
+      targets.map((item) => scheduleTaskNotificationsAsync(item)),
+    );
   }
 }

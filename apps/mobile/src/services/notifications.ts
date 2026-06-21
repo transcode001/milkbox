@@ -6,6 +6,8 @@ import { parseWeekdays } from "../utils/weekdays";
 
 const NOTIFICATION_IDS_STORAGE_KEY = "@milkbox_notification_ids";
 const TASK_REMINDERS_CHANNEL_ID = "task-reminders";
+// 現在は朝9時固定。将来的にユーザーが通知時刻を変更できるようにする場合は、
+// AsyncStorage や設定画面から REMINDER_HOUR 相当の値を取得する形に拡張する。
 const REMINDER_HOUR = 9;
 
 type NotificationIdsByItem = Record<string, string[]>;
@@ -99,7 +101,9 @@ export async function cancelAllTaskNotificationsAsync(): Promise<void> {
   }
 }
 
-function createReminderDate(item: SavedItem): Date | null {
+// 仕様: 期間タスク（startDate〜endDate）であっても、通知は開始日（startDateが
+// なければendDate）の朝9時に1回のみスケジュールする。期間中の毎日通知は行わない。
+export function createReminderDate(item: SavedItem): Date | null {
   const source = item.startDate ?? item.endDate;
   if (!source) return null;
 
@@ -115,6 +119,19 @@ function createReminderDate(item: SavedItem): Date | null {
     0,
     0,
   );
+}
+
+export function shouldScheduleNotification(item: SavedItem): boolean {
+  const weekdays = parseWeekdays(item.weekdays);
+  if (weekdays.length > 0) {
+    // 曜日繰り返しは常に対象（直近の発生日が必ず未来にあるため）
+    return true;
+  }
+
+  const reminderDate = createReminderDate(item);
+  if (!reminderDate) return false;
+
+  return reminderDate.getTime() > Date.now();
 }
 
 export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<string[]> {
