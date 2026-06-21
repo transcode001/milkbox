@@ -1,4 +1,5 @@
 import { StatusBar } from "expo-status-bar";
+import { Ionicons } from "@expo/vector-icons";
 import { NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -17,13 +18,33 @@ export default function App() {
       <DatabaseProvider>
         <NavigationContainer>
           <Tab.Navigator id="root-tabs" initialRouteName="Home">
-            <Tab.Screen name="Home" component={HomeScreen} />
+            <Tab.Screen
+              name="Home"
+              component={HomeScreen}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <Ionicons name="home-outline" size={size} color={color} />
+                ),
+              }}
+            />
             <Tab.Screen
               name="AddTask"
               component={AddTaskScreen}
               options={{ tabBarButton: () => null }}
             />
-            <Tab.Screen name="Calendar" component={CalendarScreen} />
+            <Tab.Screen
+              name="Calendar"
+              component={CalendarScreen}
+              options={{
+                tabBarIcon: ({ color, size }) => (
+                  <Ionicons
+                    name="calendar-outline"
+                    size={size}
+                    color={color}
+                  />
+                ),
+              }}
+            />
           </Tab.Navigator>
         </NavigationContainer>
       </DatabaseProvider>
