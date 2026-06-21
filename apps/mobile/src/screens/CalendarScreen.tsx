@@ -15,15 +15,18 @@ import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
-const BAR_COLORS = [
-  { bg: "#3B82F6", text: "#ffffff", light: "#DBEAFE", lightText: "#1D4ED8" },
-  { bg: "#10B981", text: "#ffffff", light: "#D1FAE5", lightText: "#065F46" },
-  { bg: "#8B5CF6", text: "#ffffff", light: "#EDE9FE", lightText: "#5B21B6" },
-  { bg: "#F97316", text: "#ffffff", light: "#FFEDD5", lightText: "#C2410C" },
-  { bg: "#F43F5E", text: "#ffffff", light: "#FFE4E6", lightText: "#9F1239" },
-  { bg: "#06B6D4", text: "#ffffff", light: "#CFFAFE", lightText: "#0E7490" },
-  { bg: "#F59E0B", text: "#ffffff", light: "#FEF3C7", lightText: "#B45309" },
+const BAR_PALETTE = [
+  { bg: "#3B82F6", border: "#2563EB", light: "#DBEAFE", lightText: "#1D4ED8" },
+  { bg: "#10B981", border: "#059669", light: "#D1FAE5", lightText: "#065F46" },
+  { bg: "#8B5CF6", border: "#7C3AED", light: "#EDE9FE", lightText: "#5B21B6" },
+  { bg: "#F97316", border: "#EA580C", light: "#FFEDD5", lightText: "#C2410C" },
+  { bg: "#F43F5E", border: "#E11D48", light: "#FFE4E6", lightText: "#9F1239" },
+  { bg: "#06B6D4", border: "#0891B2", light: "#CFFAFE", lightText: "#0E7490" },
+  { bg: "#F59E0B", border: "#D97706", light: "#FEF3C7", lightText: "#B45309" },
 ] as const;
+
+const BAR_H = 22;
+const BAR_PITCH = 26;
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
@@ -110,7 +113,7 @@ function hashColorIdx(key: string | undefined): number {
   if (!key) return 0;
   let h = 0;
   for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xffffffff;
-  return Math.abs(h) % BAR_COLORS.length;
+  return Math.abs(h) % BAR_PALETTE.length;
 }
 
 interface RangeBarEntry {
@@ -119,6 +122,7 @@ interface RangeBarEntry {
   endCol: number;
   continuesLeft: boolean;
   continuesRight: boolean;
+  isWeekday: boolean;
   lane: number;
   colorIdx: number;
 }
@@ -162,6 +166,7 @@ function getRangeBarsForWeek(
       endCol,
       continuesLeft: itemStart < weekStart,
       continuesRight: itemEnd > weekEnd,
+      isWeekday: false,
       colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
     });
   }
@@ -188,6 +193,7 @@ function getRangeBarsForWeek(
         endCol,
         continuesLeft: false,
         continuesRight: false,
+        isWeekday: true,
         colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
       });
 
@@ -202,6 +208,7 @@ function getRangeBarsForWeek(
         endCol,
         continuesLeft: false,
         continuesRight: false,
+        isWeekday: true,
         colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
       });
     }
@@ -252,7 +259,7 @@ const CalendarScreen = () => {
 
     for (const item of items) {
       if (item.categoryName && !colorMap.has(item.categoryName)) {
-        colorMap.set(item.categoryName, colorIdx++ % BAR_COLORS.length);
+        colorMap.set(item.categoryName, colorIdx++ % BAR_PALETTE.length);
       }
 
       const itemWeekdays = parseWeekdays(item.weekdays);
@@ -360,9 +367,18 @@ const CalendarScreen = () => {
           </View>
 
           <View style={styles.weekRow}>
-            {WEEKDAY_LABELS.map((label) => (
+            {WEEKDAY_LABELS.map((label, index) => (
               <View key={label} style={styles.weekCell}>
-                <Text style={styles.weekLabel}>{label}</Text>
+                <Text
+                  style={[
+                    styles.weekLabel,
+                    index === 0 && { color: "#f87171" },
+                    index === 6 && { color: "#60a5fa" },
+                    index > 0 && index < 6 && { color: "#6b7280" },
+                  ]}
+                >
+                  {label}
+                </Text>
               </View>
             ))}
           </View>
@@ -387,7 +403,6 @@ const CalendarScreen = () => {
                           key={dateKey}
                           style={[
                             styles.dayCell,
-                            isSelected && styles.dayCellSelected,
                             !isCurrentMonth && styles.dayCellMuted,
                           ]}
                           onPress={() => handleSelectDate(date)}
@@ -398,63 +413,84 @@ const CalendarScreen = () => {
                               !isCurrentMonth && styles.dayNumberMuted,
                               isSelected && styles.dayNumberSelected,
                               isToday && !isSelected && styles.dayNumberToday,
+                              !isSelected && !isToday && date.getDay() === 0 && { color: "#f87171" },
+                              !isSelected && !isToday && date.getDay() === 6 && { color: "#60a5fa" },
                             ]}
                           >
                             {date.getDate()}
                           </Text>
-                          <View style={styles.dayMeta}>
-                            {pointCount > 0 ? (
-                              <View style={[styles.eventDot, isSelected && styles.eventDotSelected]} />
-                            ) : null}
-                          </View>
+                          {pointCount > 0 && (
+                            <View style={styles.eventDotRow}>
+                              {Array.from({ length: Math.min(pointCount, 3) }).map((_, index) => (
+                                <View key={index} style={styles.eventDot} />
+                              ))}
+                            </View>
+                          )}
                         </Pressable>
                       );
                     })}
                   </View>
 
                   {laneCount > 0 && (
-                    <View style={[localStyles.barContainer, { height: laneCount * 22 + 4 }]}>
+                    <View style={[localStyles.barContainer, { height: laneCount * BAR_PITCH + 4 }]}>
                       {bars.map((bar) => {
+                        const palette = BAR_PALETTE[bar.colorIdx];
                         const span = bar.endCol - bar.startCol + 1;
-                        const padL = bar.continuesLeft ? 0 : 2;
-                        const padR = bar.continuesRight ? 0 : 2;
+                        const padL = bar.continuesLeft ? 0 : 3;
+                        const padR = bar.continuesRight ? 0 : 3;
+                        const rL = bar.continuesLeft ? 0 : 6;
+                        const rR = bar.continuesRight ? 0 : 6;
                         const leftPct = `${(bar.startCol / 7) * 100}%` as DimensionValue;
                         const widthPct = `${(span / 7) * 100}%` as DimensionValue;
-                        const color = BAR_COLORS[bar.colorIdx];
 
                         return (
-                          <View
+                          <Pressable
                             key={`${bar.item.id}-${bar.lane}-${bar.startCol}`}
+                            onPress={() => handleSelectDate(week[bar.startCol])}
                             style={[
                               localStyles.ganttBar,
                               {
-                                top: bar.lane * 22 + 2,
+                                top: bar.lane * BAR_PITCH + 2,
                                 left: leftPct,
                                 width: widthPct,
+                                height: BAR_H,
                                 marginLeft: padL,
                                 marginRight: padR,
-                                backgroundColor: color.bg,
-                                borderTopLeftRadius: bar.continuesLeft ? 0 : 4,
-                                borderBottomLeftRadius: bar.continuesLeft ? 0 : 4,
-                                borderTopRightRadius: bar.continuesRight ? 0 : 4,
-                                borderBottomRightRadius: bar.continuesRight ? 0 : 4,
+                                backgroundColor: bar.isWeekday ? `${palette.bg}22` : palette.bg,
+                                borderWidth: bar.isWeekday ? 1.5 : 0,
+                                borderColor: bar.isWeekday ? palette.bg : "transparent",
+                                borderStyle: bar.isWeekday ? "dashed" : "solid",
+                                borderTopLeftRadius: rL,
+                                borderBottomLeftRadius: rL,
+                                borderTopRightRadius: rR,
+                                borderBottomRightRadius: rR,
                               },
                             ]}
                           >
-                            <Pressable
-                              onPress={() => handleSelectDate(week[bar.startCol])}
-                              style={localStyles.ganttBarButton}
-                            >
-                              {!bar.continuesLeft && (
+                            {!bar.continuesLeft && (
+                              <View style={localStyles.ganttBarInner}>
+                                <View
+                                  style={[
+                                    localStyles.ganttBarDot,
+                                    {
+                                      backgroundColor: bar.isWeekday
+                                        ? palette.bg
+                                        : "rgba(255,255,255,0.7)",
+                                    },
+                                  ]}
+                                />
                                 <Text
-                                  style={[localStyles.ganttBarText, { color: color.text }]}
+                                  style={[
+                                    localStyles.ganttBarText,
+                                    { color: bar.isWeekday ? palette.bg : "#ffffff" },
+                                  ]}
                                   numberOfLines={1}
                                 >
                                   {bar.item.categoryName ?? bar.item.text}
                                 </Text>
-                              )}
-                            </Pressable>
-                          </View>
+                              </View>
+                            )}
+                          </Pressable>
                         );
                       })}
                     </View>
@@ -492,13 +528,16 @@ const CalendarScreen = () => {
             ) : (
               selectedItems.map((item) => {
                 const colorIdx = categoryColorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName);
-                const color = BAR_COLORS[colorIdx];
+                const color = BAR_PALETTE[colorIdx];
                 const isRange = isMultiDayRange(item);
 
                 return (
                   <View key={item.id} style={styles.scheduleCard}>
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: color.bg }]} />
                     <View style={styles.scheduleRow}>
-                      <Text style={styles.scheduleTime}>{formatScheduleTime(item)}</Text>
+                      <Text style={[styles.scheduleTime, { color: color.bg }]}>
+                        {formatScheduleTime(item)}
+                      </Text>
                       {item.categoryName ? (
                         <View style={[styles.categoryBadge, { backgroundColor: color.light }]}>
                           <Text style={[styles.categoryBadgeText, { color: color.lightText }]}>
@@ -549,18 +588,25 @@ const localStyles = StyleSheet.create({
   },
   ganttBar: {
     position: "absolute",
-    height: 18,
-    paddingHorizontal: 4,
     overflow: "hidden",
-  },
-  ganttBarButton: {
-    flex: 1,
     justifyContent: "center",
   },
+  ganttBarInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 6,
+  },
+  ganttBarDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+    flexShrink: 0,
+  },
   ganttBarText: {
-    color: "#ffffff",
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: "600",
+    flexShrink: 1,
   },
   rangeDateText: {
     fontSize: 11,

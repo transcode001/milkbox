@@ -4,6 +4,12 @@
     "slug": "mobile",
     "version": "0.1.0",
     "newArchEnabled": true,
+    "ios": {
+      "bundleIdentifier": "com.transcode001.milkbox"
+    },
+    "android": {
+      "package": "com.transcode001.milkbox"
+    },
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-sqlite"
