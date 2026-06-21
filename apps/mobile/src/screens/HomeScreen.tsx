@@ -43,7 +43,7 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleDeleteItem = async (id: number) => {
     try {
-      await dbManager.itemRepository.delete(id);
+      await dbManager.deleteItem(id);
       await loadItems();
     } catch (error) {
       Alert.alert("エラー", "タスクの削除に失敗しました");

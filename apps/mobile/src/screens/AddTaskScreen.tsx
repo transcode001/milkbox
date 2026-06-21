@@ -123,7 +123,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     const fallbackDate = noCategoryChecked ? startDate ?? endDate ?? new Date() : new Date();
 
     try {
-      await dbManager.itemRepository.create({
+      await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
         startDate: noCategoryChecked ? startDate?.toISOString() : undefined,

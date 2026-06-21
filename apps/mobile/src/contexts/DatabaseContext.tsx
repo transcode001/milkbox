@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
+import { initializeNotificationsAsync } from "../services/notifications";
 
 interface DatabaseContextValue {
   dbManager: DatabaseManager;
@@ -43,6 +44,19 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
       isMounted = false;
     };
   }, [dbManager]);
+
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const initializeNotificationReminders = async () => {
+      const hasPermission = await initializeNotificationsAsync();
+      if (hasPermission) {
+        await dbManager.syncTaskNotifications();
+      }
+    };
+
+    void initializeNotificationReminders();
+  }, [dbManager, isInitialized]);
 
   const value = useMemo(() => ({ dbManager }), [dbManager]);
 
