@@ -94,9 +94,7 @@ pnpm dlx eas-cli whoami
 Link the mobile app to an Expo project the first time:
 
 ```bash
-cd apps/mobile
-pnpm dlx eas-cli init
-cd ../..
+(cd apps/mobile && pnpm dlx eas-cli init)
 ```
 
 This may add an EAS project ID to the Expo configuration. Review that generated change
@@ -142,8 +140,7 @@ downloads are also available from the Expo dashboard. Credential status can be i
 with:
 
 ```bash
-cd apps/mobile
-pnpm dlx eas-cli credentials
+(cd apps/mobile && pnpm dlx eas-cli credentials)
 ```
 
 See [`apps/mobile/README.md`](apps/mobile/README.md) for the profile mapping and

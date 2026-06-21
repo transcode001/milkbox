@@ -30,7 +30,7 @@ installation is needed.
 ```bash
 # From the repository root
 pnpm dlx eas-cli login
-pnpm --dir apps/mobile dlx eas-cli init
+(cd apps/mobile && pnpm dlx eas-cli init)
 ```
 
 The first `init` links this app to an Expo project and may add an EAS project ID to
@@ -81,7 +81,7 @@ The completed build's page and download URL are printed by EAS CLI and remain av
 the Expo dashboard. Inspect or update managed credentials with:
 
 ```bash
-pnpm dlx eas-cli credentials
+(cd apps/mobile && pnpm dlx eas-cli credentials)
 ```
 
 ## Requirements
