@@ -108,26 +108,24 @@ const AddTaskScreen = ({ navigation }: Props) => {
       return;
     }
 
-    if (noCategoryChecked) {
-      if (isEndDateBeforeStartDate(startDate, endDate)) {
-        setDateError("終了日が開始日より前です。終了日を再設定してください。");
-        return;
-      }
-    } else {
-      if (effectiveWeekdays.length === 0) {
-        setDateError("曜日を1つ以上選択してください。");
-        return;
-      }
+    if (isEndDateBeforeStartDate(startDate, endDate)) {
+      setDateError("終了日が開始日より前です。終了日を再設定してください。");
+      return;
     }
 
-    const fallbackDate = noCategoryChecked ? startDate ?? endDate ?? new Date() : new Date();
+    if (!noCategoryChecked && effectiveWeekdays.length === 0) {
+      setDateError("曜日を1つ以上選択してください。");
+      return;
+    }
+
+    const fallbackDate = startDate ?? endDate ?? new Date();
 
     try {
       await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
-        startDate: noCategoryChecked ? startDate?.toISOString() : undefined,
-        endDate: noCategoryChecked ? endDate?.toISOString() : undefined,
+        startDate: startDate?.toISOString(),
+        endDate: endDate?.toISOString(),
         weekdays: noCategoryChecked ? undefined : JSON.stringify(effectiveWeekdays),
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
       });
@@ -312,10 +310,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     const next = !prev;
                     if (next) {
                       setSelectedWeekdays([]);
-                    } else {
-                      setStartDate(null);
-                      setEndDate(null);
-                      setActiveDateField(null);
                     }
                     return next;
                   });
@@ -336,9 +330,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   setSelectedOption(itemValue);
                   setCategoryError(null);
                   setDateError(null);
-                  setStartDate(null);
-                  setEndDate(null);
-                  setActiveDateField(null);
                   setSelectedWeekdays([]);
                 }}
                 enabled={!noCategoryChecked}
@@ -367,76 +358,74 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     blurOnSubmit={true}
                     onSubmitEditing={Keyboard.dismiss}
                   />
-              {noCategoryChecked ? (
-                <>
-                  <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
-                    <View style={styles.dateColumn}>
-                      <Text style={styles.dateLabel}>開始日</Text>
-                      <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("start")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {startDate ? formatDate(startDate) : "設定しない"}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.dateClearButton}
-                          onPress={() => clearDate("start")}
-                          disabled={!startDate}
-                        >
-                          <Text style={styles.dateClearButtonText}>クリア</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                    <View style={styles.dateColumn}>
-                      <Text style={styles.dateLabel}>終了日</Text>
-                      <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("end")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {endDate ? formatDate(endDate) : "設定しない"}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.dateClearButton}
-                          onPress={() => clearDate("end")}
-                          disabled={!endDate}
-                        >
-                          <Text style={styles.dateClearButtonText}>クリア</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+              <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
+                <View style={styles.dateColumn}>
+                  <Text style={styles.dateLabel}>開始日</Text>
+                  <View style={styles.dateControlRow}>
+                    <TouchableOpacity
+                      style={styles.dateSelectorButton}
+                      onPress={() => openDatePicker("start")}
+                    >
+                      <Text style={styles.dateSelectorButtonText}>
+                        {startDate ? formatDate(startDate) : "設定しない"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.dateClearButton}
+                      onPress={() => clearDate("start")}
+                      disabled={!startDate}
+                    >
+                      <Text style={styles.dateClearButtonText}>クリア</Text>
+                    </TouchableOpacity>
                   </View>
+                </View>
+                <View style={styles.dateColumn}>
+                  <Text style={styles.dateLabel}>終了日</Text>
+                  <View style={styles.dateControlRow}>
+                    <TouchableOpacity
+                      style={styles.dateSelectorButton}
+                      onPress={() => openDatePicker("end")}
+                    >
+                      <Text style={styles.dateSelectorButtonText}>
+                        {endDate ? formatDate(endDate) : "設定しない"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.dateClearButton}
+                      onPress={() => clearDate("end")}
+                      disabled={!endDate}
+                    >
+                      <Text style={styles.dateClearButtonText}>クリア</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
 
-                  {activeDateField && (
-                    <View style={styles.datePickerPanel}>
-                      <DateTimePicker
-                        value={activeDateField === "start" ? startDate ?? new Date() : endDate ?? new Date()}
-                        mode="date"
-                        is24Hour={true}
-                        display={Platform.OS === "ios" ? "inline" : "calendar"}
-                        onChange={onDateChange}
-                        locale="ja-JP"
-                        minimumDate={new Date(1900, 0, 1)}
-                        maximumDate={new Date(2099, 11, 31)}
-                        style={styles.datePicker}
-                      />
-                      {Platform.OS === "ios" && (
-                        <TouchableOpacity
-                          style={styles.datePickerCloseButton}
-                          onPress={() => setActiveDateField(null)}
-                        >
-                          <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+              {activeDateField && (
+                <View style={styles.datePickerPanel}>
+                  <DateTimePicker
+                    value={activeDateField === "start" ? startDate ?? new Date() : endDate ?? new Date()}
+                    mode="date"
+                    is24Hour={true}
+                    display={Platform.OS === "ios" ? "inline" : "calendar"}
+                    onChange={onDateChange}
+                    locale="ja-JP"
+                    minimumDate={new Date(1900, 0, 1)}
+                    maximumDate={new Date(2099, 11, 31)}
+                    style={styles.datePicker}
+                  />
+                  {Platform.OS === "ios" && (
+                    <TouchableOpacity
+                      style={styles.datePickerCloseButton}
+                      onPress={() => setActiveDateField(null)}
+                    >
+                      <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
+                    </TouchableOpacity>
                   )}
-                </>
-              ) : (
+                </View>
+              )}
+
+              {!noCategoryChecked && (
                 <View style={styles.weekdayContainer}>
                   <Text style={styles.dateLabel}>曜日</Text>
                   {inheritedWeekdays.length > 0 ? (

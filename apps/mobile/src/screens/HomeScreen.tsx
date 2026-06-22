@@ -7,8 +7,23 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
+import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
 type Props = BottomTabScreenProps<RootTabParamList, "Home">;
+
+const formatCategoryWeekdays = (section: CategorySection): string | null => {
+  const weekdays = new Set<number>();
+
+  for (const item of section.data) {
+    for (const weekday of parseWeekdays(item.weekdays)) {
+      weekdays.add(weekday);
+    }
+  }
+
+  return formatWeekdayLabels(
+    JSON.stringify([...weekdays].sort((left, right) => left - right)),
+  );
+};
 
 const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
@@ -109,11 +124,18 @@ const HomeScreen = ({ navigation }: Props) => {
           sections={sections}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>{section.title}</Text>
-            </View>
-          )}
+          renderSectionHeader={({ section }) => {
+            const weekdayLabels = formatCategoryWeekdays(section);
+
+            return (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                {weekdayLabels ? (
+                  <Text style={styles.sectionWeekdays}>{weekdayLabels}</Text>
+                ) : null}
+              </View>
+            );
+          }}
           renderItem={({ item }) => (
             <Swipeable renderRightActions={() => renderRightActions(item.id)}>
               <View style={styles.itemContainer}>
@@ -191,11 +213,22 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     paddingVertical: 8,
   },
   sectionHeaderText: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: "700",
+  },
+  sectionWeekdays: {
+    flexShrink: 0,
+    color: "#666",
+    fontSize: 12,
+    fontWeight: "600",
   },
   itemContainer: {
     backgroundColor: "#fff",
