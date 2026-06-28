@@ -11,7 +11,9 @@
     "build:ios": "pnpm dlx eas-cli build --platform ios --profile ios-store",
     "build:android": "pnpm dlx eas-cli build --platform android --profile android-store",
     "lint": "eslint --max-warnings 0",
-    "check-types": "tsc --noEmit"
+    "check-types": "tsc --noEmit",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@babel/runtime": "^7.29.2",
