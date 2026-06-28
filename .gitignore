@@ -42,13 +42,5 @@ yarn-error.log*
 **/.DS_Store
 *.pem
 
-# Android
-apps/mobile/android/app/build/
-apps/mobile/android/build/
-apps/mobile/android/app/.cxx/
-
-# Android keystore
-*.keystore
-
 # VSCode
 .vscode/
