@@ -145,7 +145,8 @@ with:
 ```
 
 See [`apps/mobile/README.md`](apps/mobile/README.md) for the profile mapping and
-mobile-specific details.
+mobile-specific details. For a step-by-step Android build walkthrough (in Japanese),
+see [`docs/android-build.md`](docs/android-build.md).
 
 ## Tech Stack
 

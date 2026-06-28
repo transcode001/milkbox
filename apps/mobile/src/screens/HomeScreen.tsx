@@ -7,8 +7,23 @@ import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
+import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
 type Props = BottomTabScreenProps<RootTabParamList, "Home">;
+
+const formatCategoryWeekdays = (section: CategorySection): string | null => {
+  const weekdays = new Set<number>();
+
+  for (const item of section.data) {
+    for (const weekday of parseWeekdays(item.weekdays)) {
+      weekdays.add(weekday);
+    }
+  }
+
+  return formatWeekdayLabels(
+    JSON.stringify([...weekdays].sort((left, right) => left - right)),
+  );
+};
 
 const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
@@ -62,14 +77,29 @@ const HomeScreen = ({ navigation }: Props) => {
     </TouchableOpacity>
   );
 
-  const formatItemDate = (value?: string) => {
+  const formatItemDateTime = (value?: string) => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "-";
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
     const day = String(date.getDate()).padStart(2, "0");
-    return `${year}.${month}.${day}`;
+    const hour = String(date.getHours()).padStart(2, "0");
+    const minute = String(date.getMinutes()).padStart(2, "0");
+    return `${year}.${month}.${day} ${hour}:${minute}`;
+  };
+
+  const formatItemDateTimeRange = (item: { startDate?: string; endDate?: string }) => {
+    if (item.startDate && item.endDate) {
+      return `${formatItemDateTime(item.startDate)} ～ ${formatItemDateTime(item.endDate)}`;
+    }
+    if (item.startDate) {
+      return `${formatItemDateTime(item.startDate)} ～`;
+    }
+    if (item.endDate) {
+      return `～ ${formatItemDateTime(item.endDate)}`;
+    }
+    return null;
   };
 
   const hasDateRange = (item: { startDate?: string; endDate?: string }) =>
@@ -109,34 +139,34 @@ const HomeScreen = ({ navigation }: Props) => {
           sections={sections}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
-          renderSectionHeader={({ section }) => (
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionHeaderText}>{section.title}</Text>
-            </View>
-          )}
-          renderItem={({ item }) => (
-            <Swipeable renderRightActions={() => renderRightActions(item.id)}>
-              <View style={styles.itemContainer}>
-                <Text style={styles.itemText}>{item.text}</Text>
-                {hasDateRange(item) ? (
-                  <View style={styles.itemDateRow}>
-                    {item.startDate ? (
-                      <View style={styles.itemDateColumn}>
-                        <Text style={styles.itemDateLabel}>開始日</Text>
-                        <Text style={styles.itemDateValue}>{formatItemDate(item.startDate)}</Text>
-                      </View>
-                    ) : null}
-                    {item.endDate ? (
-                      <View style={styles.itemDateColumn}>
-                        <Text style={styles.itemDateLabel}>終了日</Text>
-                        <Text style={styles.itemDateValue}>{formatItemDate(item.endDate)}</Text>
-                      </View>
-                    ) : null}
-                  </View>
+          renderSectionHeader={({ section }) => {
+            const weekdayLabels = formatCategoryWeekdays(section);
+
+            return (
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                {weekdayLabels ? (
+                  <Text style={styles.sectionWeekdays}>{weekdayLabels}</Text>
                 ) : null}
               </View>
-            </Swipeable>
-          )}
+            );
+          }}
+          renderItem={({ item }) => {
+            const dateTimeRange = formatItemDateTimeRange(item);
+
+            return (
+              <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+                <View style={styles.itemContainer}>
+                  <View style={styles.itemMainRow}>
+                    <Text style={styles.itemText}>{item.text}</Text>
+                    {hasDateRange(item) && dateTimeRange ? (
+                      <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
+                    ) : null}
+                  </View>
+                </View>
+              </Swipeable>
+            );
+          }}
         />
       )}
     </SafeAreaView>
@@ -191,11 +221,22 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
   },
   sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
     paddingVertical: 8,
   },
   sectionHeaderText: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: "700",
+  },
+  sectionWeekdays: {
+    flexShrink: 0,
+    color: "#666",
+    fontSize: 12,
+    fontWeight: "600",
   },
   itemContainer: {
     backgroundColor: "#fff",
@@ -204,27 +245,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
+  itemMainRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
   itemText: {
+    flexShrink: 1,
     fontSize: 15,
     fontWeight: "500",
   },
-  itemDateRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginTop: 6,
-  },
-  itemDateColumn: {
-    flex: 1,
-  },
-  itemDateLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    color: "#444",
-    marginBottom: 2,
-  },
-  itemDateValue: {
-    fontSize: 12,
+  itemDateSummary: {
+    flexShrink: 0,
     color: "#666",
+    fontSize: 12,
   },
   stateContainer: {
     flex: 1,
