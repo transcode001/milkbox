@@ -15,6 +15,10 @@
     "jsx": "react-native",
     "isolatedModules": true,
     "noEmit": true,
+    "types": [
+      "jest",
+      "node"
+    ],
     "paths": {
       "@milkbox/shared": ["../../packages/shared/src/index.ts"],
       "@milkbox/shared/*": ["../../packages/shared/src/*"]
@@ -23,7 +27,9 @@
   "include": [
     "App.tsx",
     "index.js",
-    "src/**/*"
+    "src/**/*",
+    "test/**/*",
+    "jest.setup.ts"
   ],
   "exclude": [
     "node_modules"
