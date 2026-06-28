@@ -1,1 +1,5 @@
 .expo/
+
+# Managed workflow: ネイティブプロジェクトはビルド時に expo prebuild で生成する
+/android
+/ios
