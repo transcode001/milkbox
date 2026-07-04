@@ -16,3 +16,6 @@ import { createApiClient, formatDate } from "@repo/core";
 const api = createApiClient("https://api.example.com");
 const formatted = formatDate(new Date());
 ```
+
+---
+<!-- last reviewed: 2026-07-05 -->

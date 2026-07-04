@@ -63,14 +63,14 @@ pnpm build:mobile:store
 
 These commands map to profiles in `eas.json`:
 
-| Profile | Platform | Output/use |
-| --- | --- | --- |
-| `android-apk` | Android | Installable APK for devices and internal testing |
-| `android-store` | Android | AAB for Google Play |
-| `ios-simulator` | iOS | Simulator-only archive |
-| `ios-device` | iOS | Internally distributed build for registered devices |
-| `ios-store` | iOS | App Store/TestFlight archive |
-| `store` | Android + iOS | Both store artifacts |
+| Profile         | Platform      | Output/use                                          |
+| --------------- | ------------- | --------------------------------------------------- |
+| `android-apk`   | Android       | Installable APK for devices and internal testing    |
+| `android-store` | Android       | AAB for Google Play                                 |
+| `ios-simulator` | iOS           | Simulator-only archive                              |
+| `ios-device`    | iOS           | Internally distributed build for registered devices |
+| `ios-store`     | iOS           | App Store/TestFlight archive                        |
+| `store`         | Android + iOS | Both store artifacts                                |
 
 EAS can generate and store the Android keystore and iOS distribution credentials during
 the first build. An Apple Developer Program membership is required for physical-device and
@@ -87,7 +87,12 @@ the Expo dashboard. Inspect or update managed credentials with:
 ## Requirements
 
 - Node.js >= 18
-- pnpm >= 9
+- pnpm >= 9.0.0
 - Expo account
 - Apple Developer Program membership for iOS device/App Store builds
 - Google Play Console account for publishing Android store builds
+
+For local Android APK builds, see [`docs/build-android.md`](../../docs/build-android.md).
+
+---
+<!-- last reviewed: 2026-07-05 -->
