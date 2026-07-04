@@ -142,24 +142,24 @@ import { Button } from "@repo/ui/button";
 
 ### Common Commands
 
-| Command | Description |
-| --- | --- |
-| `pnpm build` | Build all apps |
-| `pnpm lint` | Lint all code |
-| `pnpm check-types` | Type check all code |
-| `pnpm format` | Format code with Prettier |
+| Command            | Description               |
+| ------------------ | ------------------------- |
+| `pnpm build`       | Build all apps            |
+| `pnpm lint`        | Lint all code             |
+| `pnpm check-types` | Type check all code       |
+| `pnpm format`      | Format code with Prettier |
 
 ### Mobile-Specific
 
-| Command | Description |
-| --- | --- |
-| `pnpm dev:mobile:ios` | Start iOS development |
-| `pnpm dev:mobile:android` | Start Android development |
-| `pnpm build:mobile:android:apk` | Build an Android APK with EAS |
-| `pnpm build:mobile:android:store` | Build an Android App Bundle with EAS |
-| `pnpm build:mobile:ios:simulator` | Build an iOS Simulator artifact with EAS |
-| `pnpm build:mobile:ios:device` | Build an iOS device artifact with EAS |
-| `pnpm build:mobile:ios:store` | Build an iOS App Store/TestFlight artifact with EAS |
+| Command                           | Description                                         |
+| --------------------------------- | --------------------------------------------------- |
+| `pnpm dev:mobile:ios`             | Start iOS development                               |
+| `pnpm dev:mobile:android`         | Start Android development                           |
+| `pnpm build:mobile:android:apk`   | Build an Android APK with EAS                       |
+| `pnpm build:mobile:android:store` | Build an Android App Bundle with EAS                |
+| `pnpm build:mobile:ios:simulator` | Build an iOS Simulator artifact with EAS            |
+| `pnpm build:mobile:ios:device`    | Build an iOS device artifact with EAS               |
+| `pnpm build:mobile:ios:store`     | Build an iOS App Store/TestFlight artifact with EAS |
 
 ## Platform-Specific Setup
 
