@@ -157,6 +157,7 @@ import { Button } from "@repo/ui/button";
 | `pnpm dev:mobile:android`         | Start Android development                           |
 | `pnpm build:mobile:android:apk`   | Build an Android APK with EAS                       |
 | `pnpm build:mobile:android:store` | Build an Android App Bundle with EAS                |
+| `pnpm build:mobile:store`         | Build Android and iOS store artifacts with EAS      |
 | `pnpm build:mobile:ios:simulator` | Build an iOS Simulator artifact with EAS            |
 | `pnpm build:mobile:ios:device`    | Build an iOS device artifact with EAS               |
 | `pnpm build:mobile:ios:store`     | Build an iOS App Store/TestFlight artifact with EAS |

@@ -18,6 +18,8 @@ pnpm dev
 
 This starts the Next.js renderer on port 3001 and the Electron main process in watch mode.
 
+Note: `apps/docs` and `apps/desktop` both use port 3001 in dev mode, so they cannot run simultaneously.
+
 ## Building
 
 From the repository root:

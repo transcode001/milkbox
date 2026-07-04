@@ -18,6 +18,8 @@ pnpm dev
 
 Open [http://localhost:3001](http://localhost:3001) in your browser.
 
+Note: `apps/docs` and `apps/desktop` both use port 3001 in dev mode, so they cannot run simultaneously.
+
 ## Building
 
 From the repository root:
