@@ -145,8 +145,8 @@ with:
 ```
 
 See [`apps/mobile/README.md`](apps/mobile/README.md) for the profile mapping and
-mobile-specific details. For a step-by-step Android build walkthrough (in Japanese),
-see [`docs/android-build.md`](docs/android-build.md).
+mobile-specific details. For a step-by-step local Android build walkthrough (in Japanese),
+see [`docs/build-android.md`](docs/build-android.md).
 
 ## Tech Stack
 
@@ -167,3 +167,6 @@ see [`docs/android-build.md`](docs/android-build.md).
 Proprietary
 
 This software is private and confidential. Unauthorized copying, distribution, or use of this software is strictly prohibited.
+
+---
+<!-- last reviewed: 2026-07-05 -->

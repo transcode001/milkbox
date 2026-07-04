@@ -87,7 +87,12 @@ the Expo dashboard. Inspect or update managed credentials with:
 ## Requirements
 
 - Node.js >= 18
-- pnpm >= 9
+- pnpm >= 9.0.0
 - Expo account
 - Apple Developer Program membership for iOS device/App Store builds
 - Google Play Console account for publishing Android store builds
+
+For local Android APK builds, see [`docs/build-android.md`](../../docs/build-android.md).
+
+---
+<!-- last reviewed: 2026-07-05 -->

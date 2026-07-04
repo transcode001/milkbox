@@ -82,7 +82,7 @@ Each app will produce platform-specific outputs:
 
 - **Web**: `.next/` directory for server deployment
 - **Desktop**: Distributable installers for macOS/Windows/Linux
-- **Mobile**: APK (Android) or IPA (iOS) files
+- **Mobile**: EAS profiles can produce APK/AAB (Android) and iOS simulator/device/store artifacts
 
 ## Project Architecture
 
@@ -155,8 +155,11 @@ import { Button } from "@repo/ui/button";
 | --- | --- |
 | `pnpm dev:mobile:ios` | Start iOS development |
 | `pnpm dev:mobile:android` | Start Android development |
-| `pnpm build:mobile:ios` | Build for iOS (requires EAS) |
-| `pnpm build:mobile:android` | Build for Android (requires EAS) |
+| `pnpm build:mobile:android:apk` | Build an Android APK with EAS |
+| `pnpm build:mobile:android:store` | Build an Android App Bundle with EAS |
+| `pnpm build:mobile:ios:simulator` | Build an iOS Simulator artifact with EAS |
+| `pnpm build:mobile:ios:device` | Build an iOS device artifact with EAS |
+| `pnpm build:mobile:ios:store` | Build an iOS App Store/TestFlight artifact with EAS |
 
 ## Platform-Specific Setup
 
@@ -174,3 +177,6 @@ See [apps/mobile/README.md](apps/mobile/README.md)
 ## License
 
 Proprietary
+
+---
+<!-- last reviewed: 2026-07-05 -->

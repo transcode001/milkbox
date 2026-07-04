@@ -4,16 +4,35 @@ Electron-based desktop application for Milkbox.
 
 ## Development
 
+From the repository root:
+
 ```bash
-npm run dev
+pnpm dev:desktop
 ```
 
-This will start both the Next.js renderer (port 3001) and Electron main process in watch mode.
+Or from `apps/desktop`:
+
+```bash
+pnpm dev
+```
+
+This starts the Next.js renderer on port 3001 and the Electron main process in watch mode.
 
 ## Building
 
+From the repository root:
+
 ```bash
-npm run build
+pnpm --filter desktop build
 ```
 
-Builds the application and creates distributable packages for your platform.
+For distributable packages, run from `apps/desktop`:
+
+```bash
+pnpm build:release
+```
+
+The release command builds the renderer and main process, then runs `electron-builder`.
+
+---
+<!-- last reviewed: 2026-07-05 -->
