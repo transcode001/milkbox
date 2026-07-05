@@ -373,6 +373,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                         key={category.id}
                         label={category.name}
                         value={category.id.toString()}
+                        color="#333333"
                       />
                     ))}
                   </Picker>
