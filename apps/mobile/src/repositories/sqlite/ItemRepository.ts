@@ -11,7 +11,11 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async initializeTable(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    await this.recoverInterruptedCategoryIdMigration();
+    const databaseVersion = await this.getDatabaseVersion();
+
+    if (databaseVersion < 1) {
+      await this.recoverInterruptedCategoryIdMigration();
+    }
 
     await this.db.execAsync(`
       CREATE TABLE IF NOT EXISTS items (
@@ -34,7 +38,6 @@ export class SQLiteItemRepository implements IItemRepository {
     const tableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
     const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
     const weekdaysColumn = tableInfo.find((column) => column.name === 'weekdays');
-    const databaseVersion = await this.getDatabaseVersion();
 
     if (!weekdaysColumn) {
       await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
@@ -94,8 +97,6 @@ export class SQLiteItemRepository implements IItemRepository {
     if (!this.db) throw new Error('Database not initialized');
 
     await this.runInTransaction(async () => {
-      if (!this.db) throw new Error('Database not initialized');
-
       await this.db.execAsync('DROP TABLE IF EXISTS items_new;');
       await this.db.execAsync(`
         CREATE TABLE items_new (
@@ -113,9 +114,8 @@ export class SQLiteItemRepository implements IItemRepository {
         INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays)
         SELECT id, categoryId, text, date, startDate, endDate, weekdays FROM items;
       `);
-      await this.db.execAsync('DROP TABLE items;');
+      await this.db.execAsync('DROP TABLE IF EXISTS items;');
       await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
-      await this.db.execAsync('PRAGMA user_version = 1;');
     });
   }
 
