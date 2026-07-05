@@ -7,6 +7,7 @@ import { parseWeekdays } from "../utils/weekdays";
 const NOTIFICATION_IDS_STORAGE_KEY = "@milkbox_notification_ids";
 const TASK_REMINDERS_CHANNEL_ID = "task-reminders";
 // 曜日繰り返しは従来通り朝9時固定。単発タスクは登録した開始日時を使う。
+// 当日の9時を過ぎて登録した曜日繰り返しは、初回通知が最大7日後になる。
 const REMINDER_HOUR = 9;
 
 type NotificationIdsByItem = Record<string, string[]>;
@@ -184,6 +185,10 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
       identifiers.push(identifier);
     }
 
+    if (weekdays.length > 0 && identifiers.length === 0) {
+      throw new Error(`No notifications scheduled for weekday item ${item.id}`);
+    }
+
     const idsByItem = await readNotificationIds();
     idsByItem[String(item.id)] = identifiers;
     await writeNotificationIds(idsByItem);
@@ -191,6 +196,6 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
     return identifiers;
   } catch (error) {
     console.warn(`Failed to schedule notifications for item ${item.id}`, error);
-    return [];
+    throw error;
   }
 }

@@ -39,7 +39,11 @@ export class DatabaseManager {
 
   async createItem(data: CreateItemDto): Promise<SavedItem> {
     const item = await this.itemRepository.create(data);
-    await scheduleTaskNotificationsAsync(item);
+    try {
+      await scheduleTaskNotificationsAsync(item);
+    } catch (error) {
+      console.warn(`Notification scheduling failed for item ${item.id}`, error);
+    }
     return item;
   }
 
@@ -50,7 +54,11 @@ export class DatabaseManager {
     await this.itemRepository.update(id, data);
     const item = await this.itemRepository.findById(id);
     if (item) {
-      await scheduleTaskNotificationsAsync(item);
+      try {
+        await scheduleTaskNotificationsAsync(item);
+      } catch (error) {
+        console.warn(`Notification scheduling failed for item ${item.id}`, error);
+      }
     }
   }
 
@@ -73,8 +81,8 @@ export class DatabaseManager {
     const items = await this.itemRepository.findAll();
     const targets = items.filter((item) => shouldScheduleNotification(item));
 
-    await Promise.all(
-      targets.map((item) => scheduleTaskNotificationsAsync(item)),
-    );
+    for (const item of targets) {
+      await scheduleTaskNotificationsAsync(item);
+    }
   }
 }
