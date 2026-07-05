@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "Milkbox Mobile",
+    "slug": "milkbox-mobile",
     "version": "0.1.0",
+    "orientation": "portrait",
     "newArchEnabled": true,
     "ios": {
       "bundleIdentifier": "com.transcode001.milkbox"
