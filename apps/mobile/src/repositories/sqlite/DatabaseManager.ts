@@ -82,7 +82,11 @@ export class DatabaseManager {
     const targets = items.filter((item) => shouldScheduleNotification(item));
 
     for (const item of targets) {
-      await scheduleTaskNotificationsAsync(item);
+      try {
+        await scheduleTaskNotificationsAsync(item);
+      } catch (error) {
+        console.warn(`Notification sync failed for item ${item.id}`, error);
+      }
     }
   }
 }

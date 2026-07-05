@@ -185,10 +185,6 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
       identifiers.push(identifier);
     }
 
-    if (weekdays.length > 0 && identifiers.length === 0) {
-      throw new Error(`No notifications scheduled for weekday item ${item.id}`);
-    }
-
     const idsByItem = await readNotificationIds();
     idsByItem[String(item.id)] = identifiers;
     await writeNotificationIds(idsByItem);
