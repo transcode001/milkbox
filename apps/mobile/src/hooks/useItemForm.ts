@@ -14,11 +14,14 @@ export interface UseItemFormResult {
   setText: React.Dispatch<React.SetStateAction<string>>;
   loadItems: () => Promise<void>;
   deleteItem: (id: number) => Promise<void>;
+  toggleItemNotification: (id: number, enabled: boolean) => Promise<void>;
+  togglingNotificationItemId: number | null;
 }
 
 export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult => {
   const [text, setText] = useState("");
   const [items, setItems] = useState<CategorySection[]>([]);
+  const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
 
   const loadItems = useCallback(async () => {
     try {
@@ -42,11 +45,30 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
     [dbManager, loadItems],
   );
 
+  const toggleItemNotification = useCallback(
+    async (id: number, enabled: boolean) => {
+      if (togglingNotificationItemId !== null) return;
+
+      try {
+        setTogglingNotificationItemId(id);
+        await dbManager.updateItem(id, { notificationEnabled: enabled });
+        await loadItems();
+      } catch {
+        Alert.alert("Error", "通知設定の更新に失敗しました");
+      } finally {
+        setTogglingNotificationItemId(null);
+      }
+    },
+    [dbManager, loadItems, togglingNotificationItemId],
+  );
+
   return {
     text,
     items,
     setText,
     loadItems,
     deleteItem,
+    toggleItemNotification,
+    togglingNotificationItemId,
   };
 };

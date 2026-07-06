@@ -6,7 +6,6 @@ import {
   cancelAllTaskNotificationsAsync,
   cancelTaskNotificationsAsync,
   scheduleTaskNotificationsAsync,
-  shouldScheduleNotification,
 } from '../../services/notifications';
 
 export class DatabaseManager {
@@ -79,9 +78,8 @@ export class DatabaseManager {
 
   async syncTaskNotifications(): Promise<void> {
     const items = await this.itemRepository.findAll();
-    const targets = items.filter((item) => shouldScheduleNotification(item));
 
-    for (const item of targets) {
+    for (const item of items) {
       try {
         await scheduleTaskNotificationsAsync(item);
       } catch (error) {

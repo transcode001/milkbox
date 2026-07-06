@@ -84,7 +84,15 @@ const AddTaskScreen = ({ navigation }: Props) => {
     formatDate,
     formatTime,
   } = useDatePicker();
-  const { text, items, setText, loadItems, deleteItem } = useItemForm({ dbManager });
+  const {
+    text,
+    items,
+    setText,
+    loadItems,
+    deleteItem,
+    toggleItemNotification,
+    togglingNotificationItemId,
+  } = useItemForm({ dbManager });
   const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -561,13 +569,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 <TouchableOpacity
                   style={styles.checkboxRow}
                   onPress={() => {
-                    void (async () => {
-                      await dbManager.updateItem(item.id, {
-                        notificationEnabled: !item.notificationEnabled,
-                      });
-                      await loadItems();
-                    })();
+                    void toggleItemNotification(item.id, !item.notificationEnabled);
                   }}
+                  disabled={togglingNotificationItemId !== null}
                   activeOpacity={0.8}
                 >
                   <View style={[styles.checkbox, item.notificationEnabled && styles.checkboxChecked]}>

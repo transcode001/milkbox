@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 
+type StoredItem = Omit<SavedItem, 'notificationEnabled'> & {
+  notificationEnabled?: boolean | number;
+};
+
 export class AsyncStorageItemRepository implements IItemRepository {
   private readonly STORAGE_KEY = '@milkbox_items';
 
@@ -10,10 +14,11 @@ export class AsyncStorageItemRepository implements IItemRepository {
 
   async findAll(): Promise<SavedItem[]> {
     const jsonValue = await AsyncStorage.getItem(this.STORAGE_KEY);
-    const items: SavedItem[] = jsonValue ? JSON.parse(jsonValue) : [];
+    const items: StoredItem[] = jsonValue ? JSON.parse(jsonValue) : [];
     return items.map((item) => ({
       ...item,
-      notificationEnabled: item.notificationEnabled !== false,
+      notificationEnabled:
+        item.notificationEnabled !== false && item.notificationEnabled !== 0,
     }));
   }
 
