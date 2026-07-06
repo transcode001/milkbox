@@ -8,6 +8,7 @@ import {
 } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import HomeScreen from "./src/screens/HomeScreen";
 import AddTaskScreen from "./src/screens/AddTaskScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
@@ -40,40 +41,42 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <StatusBar style="auto" />
-      <DatabaseProvider>
-        <NavigationContainer ref={navigationRef}>
-          <Tab.Navigator id="root-tabs" initialRouteName="Home">
-            <Tab.Screen
-              name="Home"
-              component={HomeScreen}
-              options={{
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons name="home-outline" size={size} color={color} />
-                ),
-              }}
-            />
-            <Tab.Screen
-              name="AddTask"
-              component={AddTaskScreen}
-              options={{ tabBarButton: () => null }}
-            />
-            <Tab.Screen
-              name="Calendar"
-              component={CalendarScreen}
-              options={{
-                tabBarIcon: ({ color, size }) => (
-                  <Ionicons
-                    name="calendar-outline"
-                    size={size}
-                    color={color}
-                  />
-                ),
-              }}
-            />
-          </Tab.Navigator>
-        </NavigationContainer>
-      </DatabaseProvider>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <DatabaseProvider>
+          <NavigationContainer ref={navigationRef}>
+            <Tab.Navigator id="root-tabs" initialRouteName="Home">
+              <Tab.Screen
+                name="Home"
+                component={HomeScreen}
+                options={{
+                  tabBarIcon: ({ color, size }) => (
+                    <Ionicons name="home-outline" size={size} color={color} />
+                  ),
+                }}
+              />
+              <Tab.Screen
+                name="AddTask"
+                component={AddTaskScreen}
+                options={{ tabBarButton: () => null }}
+              />
+              <Tab.Screen
+                name="Calendar"
+                component={CalendarScreen}
+                options={{
+                  tabBarIcon: ({ color, size }) => (
+                    <Ionicons
+                      name="calendar-outline"
+                      size={size}
+                      color={color}
+                    />
+                  ),
+                }}
+              />
+            </Tab.Navigator>
+          </NavigationContainer>
+        </DatabaseProvider>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }

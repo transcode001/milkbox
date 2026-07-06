@@ -11,6 +11,12 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async initializeTable(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+    const databaseVersion = await this.getDatabaseVersion();
+
+    if (databaseVersion < 1) {
+      await this.recoverInterruptedCategoryIdMigration();
+    }
+
     await this.db.execAsync(`
       CREATE TABLE IF NOT EXISTS items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,9 +44,61 @@ export class SQLiteItemRepository implements IItemRepository {
     }
 
     // Migrate older table definitions where categoryId was NOT NULL.
-    if (categoryIdColumn?.notnull === 1) {
+    if (databaseVersion < 1 && categoryIdColumn?.notnull === 1) {
+      await this.migrateNullableCategoryId();
+    }
+
+    if (databaseVersion < 1) {
+      await this.db.execAsync('PRAGMA user_version = 1;');
+    }
+  }
+
+  private async getDatabaseVersion(): Promise<number> {
+    if (!this.db) throw new Error('Database not initialized');
+    const row = await this.db.getFirstAsync<{ user_version: number }>(
+      'PRAGMA user_version;'
+    );
+    return row?.user_version ?? 0;
+  }
+
+  private async recoverInterruptedCategoryIdMigration(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const rows = await this.db.getAllAsync<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('items', 'items_new')"
+    );
+    const tableNames = new Set(rows.map((row) => row.name));
+
+    if (!tableNames.has('items') && tableNames.has('items_new')) {
+      await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
+    } else if (tableNames.has('items_new')) {
+      await this.db.execAsync('DROP TABLE IF EXISTS items_new;');
+    }
+  }
+
+  private async runInTransaction(operation: () => Promise<void>): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.db.execAsync('BEGIN IMMEDIATE TRANSACTION;');
+    try {
+      await operation();
+      await this.db.execAsync('COMMIT;');
+    } catch (error) {
+      try {
+        await this.db.execAsync('ROLLBACK;');
+      } catch (rollbackError) {
+        console.warn('Failed to rollback item migration', rollbackError);
+      }
+      throw error;
+    }
+  }
+
+  private async migrateNullableCategoryId(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+
+    await this.runInTransaction(async () => {
+      await this.db.execAsync('DROP TABLE IF EXISTS items_new;');
       await this.db.execAsync(`
-        BEGIN TRANSACTION;
         CREATE TABLE items_new (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           categoryId INTEGER,
@@ -51,13 +109,14 @@ export class SQLiteItemRepository implements IItemRepository {
           weekdays TEXT,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
+      `);
+      await this.db.execAsync(`
         INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays)
         SELECT id, categoryId, text, date, startDate, endDate, weekdays FROM items;
-        DROP TABLE items;
-        ALTER TABLE items_new RENAME TO items;
-        COMMIT;
       `);
-    }
+      await this.db.execAsync('DROP TABLE IF EXISTS items;');
+      await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
+    });
   }
 
   async clear(): Promise<void> {

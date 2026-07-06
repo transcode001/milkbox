@@ -137,9 +137,9 @@ export function shouldScheduleNotification(item: SavedItem): boolean {
 }
 
 export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<string[]> {
-  await cancelTaskNotificationsAsync(item.id);
-
   try {
+    await cancelTaskNotificationsAsync(item.id);
+
     const hasPermission = await ensureNotificationPermission();
     if (!hasPermission) return [];
 
