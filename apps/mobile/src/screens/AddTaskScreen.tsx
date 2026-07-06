@@ -89,6 +89,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
 
   const inheritedWeekdays = useMemo(() => {
     if (!selectedOption) return [];
@@ -155,12 +156,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
         endDate: endDate?.toISOString(),
         weekdays: noCategoryChecked ? undefined : JSON.stringify(effectiveWeekdays),
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
+        notificationEnabled,
       });
 
       setText("");
       setStartDate(null);
       setEndDate(null);
       setSelectedWeekdays([]);
+      setNotificationEnabled(true);
       setActiveDatePicker(null);
       await loadItems();
       setShowPostSubmitModal(true);
@@ -516,6 +519,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   )}
                   {dateError && <Text style={styles.errorText}>{dateError}</Text>}
                   <TouchableOpacity
+                    style={styles.checkboxRow}
+                    onPress={() => setNotificationEnabled((prev) => !prev)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.checkbox, notificationEnabled && styles.checkboxChecked]}>
+                      {notificationEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.checkboxLabel}>通知</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => {
                       void handleSubmit();
@@ -545,6 +558,23 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     {formatWeekdayLabels(item.weekdays) ?? formatSavedItemDateRange(item)}
                   </Text>
                 </View>
+                <TouchableOpacity
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    void (async () => {
+                      await dbManager.updateItem(item.id, {
+                        notificationEnabled: !item.notificationEnabled,
+                      });
+                      await loadItems();
+                    })();
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkbox, item.notificationEnabled && styles.checkboxChecked]}>
+                    {item.notificationEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                  </View>
+                  <Text style={styles.checkboxLabel}>通知</Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => deleteItem(item.id)}

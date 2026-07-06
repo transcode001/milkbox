@@ -124,6 +124,8 @@ export function createReminderDate(item: SavedItem): Date | null {
 }
 
 export function shouldScheduleNotification(item: SavedItem): boolean {
+  if (!item.notificationEnabled) return false;
+
   const weekdays = parseWeekdays(item.weekdays);
   if (weekdays.length > 0) {
     // 曜日繰り返しは常に対象（直近の発生日が必ず未来にあるため）
@@ -139,6 +141,8 @@ export function shouldScheduleNotification(item: SavedItem): boolean {
 export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<string[]> {
   try {
     await cancelTaskNotificationsAsync(item.id);
+
+    if (!item.notificationEnabled) return [];
 
     const hasPermission = await ensureNotificationPermission();
     if (!hasPermission) return [];

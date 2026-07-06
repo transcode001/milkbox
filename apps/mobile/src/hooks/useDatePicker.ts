@@ -98,7 +98,11 @@ export const useDatePicker = (): UseDatePickerResult => {
   };
 
   const clearDate = (field: DateField) => {
-    field === "start" ? setStartDate(null) : setEndDate(null);
+    if (field === "start") {
+      setStartDate(null);
+    } else {
+      setEndDate(null);
+    }
   };
 
   const formatDate = (date: Date): string => {

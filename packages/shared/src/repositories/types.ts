@@ -7,6 +7,7 @@ export interface SavedItem {
   endDate?: string;
   weekdays?: string;
   categoryName?: string;
+  notificationEnabled: boolean;
 }
 
 export interface CreateItemDto {
@@ -16,8 +17,10 @@ export interface CreateItemDto {
   startDate?: string;
   endDate?: string;
   weekdays?: string;
+  notificationEnabled?: boolean;
 }
 
 export interface UpdateItemDto {
   text?: string;
+  notificationEnabled?: boolean;
 }

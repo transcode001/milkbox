@@ -25,7 +25,7 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
       const result = await dbManager.itemRepository.findAllWithCategory();
       const grouped = groupByCategory(result);
       setItems(grouped);
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to load data");
     }
   }, [dbManager]);
@@ -35,7 +35,7 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
       try {
         await dbManager.deleteItem(id);
         await loadItems();
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "Failed to delete data");
       }
     },

@@ -39,7 +39,7 @@ const HomeScreen = ({ navigation }: Props) => {
       const grouped = groupByCategory(result);
 
       setSections(grouped);
-    } catch (error) {
+    } catch {
       setErrorMessage("タスクの読み込みに失敗しました");
     } finally {
       setLoading(false);
@@ -60,7 +60,7 @@ const HomeScreen = ({ navigation }: Props) => {
     try {
       await dbManager.deleteItem(id);
       await loadItems();
-    } catch (error) {
+    } catch {
       Alert.alert("エラー", "タスクの削除に失敗しました");
     }
   };

@@ -27,6 +27,8 @@ export const config = [
     },
   },
   {
-    ignores: ["dist/**"],
+    ignores: ["dist/**", "jest.config.js"],
   },
 ];
+
+export default config;

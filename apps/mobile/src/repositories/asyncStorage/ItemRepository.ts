@@ -10,7 +10,11 @@ export class AsyncStorageItemRepository implements IItemRepository {
 
   async findAll(): Promise<SavedItem[]> {
     const jsonValue = await AsyncStorage.getItem(this.STORAGE_KEY);
-    return jsonValue ? JSON.parse(jsonValue) : [];
+    const items: SavedItem[] = jsonValue ? JSON.parse(jsonValue) : [];
+    return items.map((item) => ({
+      ...item,
+      notificationEnabled: item.notificationEnabled !== false,
+    }));
   }
 
   async findById(id: number): Promise<SavedItem | null> {
@@ -28,6 +32,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       startDate: data.startDate,
       endDate: data.endDate,
       weekdays: data.weekdays,
+      notificationEnabled: data.notificationEnabled !== false,
     };
     items.unshift(newItem);
     await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
@@ -37,8 +42,13 @@ export class AsyncStorageItemRepository implements IItemRepository {
   async update(id: number, data: UpdateItemDto): Promise<void> {
     const items = await this.findAll();
     const index = items.findIndex(item => item.id === id);
-    if (index !== -1 && data.text !== undefined) {
-      items[index].text = data.text;
+    if (index !== -1) {
+      if (data.text !== undefined) {
+        items[index].text = data.text;
+      }
+      if (data.notificationEnabled !== undefined) {
+        items[index].notificationEnabled = data.notificationEnabled;
+      }
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     }
   }
