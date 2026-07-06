@@ -43,23 +43,21 @@ export class SQLiteItemRepository implements IItemRepository {
     const tableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
     const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
     const weekdaysColumn = tableInfo.find((column) => column.name === 'weekdays');
+    const notificationEnabledColumn = tableInfo.find((column) => column.name === 'notificationEnabled');
 
     if (!weekdaysColumn) {
       await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
     }
 
-    // Migrate older table definitions where categoryId was NOT NULL.
-    if (databaseVersion < 1 && categoryIdColumn?.notnull === 1) {
-      await this.migrateNullableCategoryId();
-    }
-
-    const migratedTableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
-    const notificationEnabledColumn = migratedTableInfo.find((column) => column.name === 'notificationEnabled');
-
     if (!notificationEnabledColumn) {
       await this.db.execAsync(
         'ALTER TABLE items ADD COLUMN notificationEnabled INTEGER NOT NULL DEFAULT 1;'
       );
+    }
+
+    // Migrate older table definitions where categoryId was NOT NULL.
+    if (databaseVersion < 1 && categoryIdColumn?.notnull === 1) {
+      await this.migrateNullableCategoryId();
     }
 
     if (databaseVersion < 1) {
