@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useMemo, useState } from "react";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
@@ -303,7 +303,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
         </View>
       </Modal>
 
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <KeyboardAvoidingView
           style={styles.content}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -590,7 +589,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
             ListEmptyComponent={<Text style={styles.emptyListText}>保存済みの予定はまだありません。</Text>}
           />
         </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 };

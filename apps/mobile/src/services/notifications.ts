@@ -161,14 +161,22 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
     const weekdays = parseWeekdays(item.weekdays);
 
     if (weekdays.length > 0) {
+      // startDate に時刻が含まれていればその時刻を使い、なければ9時固定
+      const notifyHour = item.startDate?.includes("T")
+        ? new Date(item.startDate).getHours()
+        : REMINDER_HOUR;
+      const notifyMinute = item.startDate?.includes("T")
+        ? new Date(item.startDate).getMinutes()
+        : 0;
+
       for (const weekday of weekdays) {
         const identifier = await Notifications.scheduleNotificationAsync({
           content,
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
             weekday: weekday + 1,
-            hour: REMINDER_HOUR,
-            minute: 0,
+            hour: notifyHour,
+            minute: notifyMinute,
             channelId: TASK_REMINDERS_CHANNEL_ID,
           },
         });
