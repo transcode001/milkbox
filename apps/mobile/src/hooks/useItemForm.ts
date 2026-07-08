@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Alert } from "react-native";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import type { CategorySection } from "../utils/groupByCategory";
@@ -22,6 +22,7 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
   const [text, setText] = useState("");
   const [items, setItems] = useState<CategorySection[]>([]);
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
+  const togglingRef = useRef(false);
 
   const loadItems = useCallback(async () => {
     try {
@@ -47,7 +48,8 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
 
   const toggleItemNotification = useCallback(
     async (id: number, enabled: boolean) => {
-      if (togglingNotificationItemId !== null) return;
+      if (togglingRef.current) return;
+      togglingRef.current = true;
 
       try {
         setTogglingNotificationItemId(id);
@@ -56,10 +58,11 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
       } catch {
         Alert.alert("Error", "通知設定の更新に失敗しました");
       } finally {
+        togglingRef.current = false;
         setTogglingNotificationItemId(null);
       }
     },
-    [dbManager, loadItems, togglingNotificationItemId],
+    [dbManager, loadItems],
   );
 
   return {

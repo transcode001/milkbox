@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
@@ -19,32 +19,51 @@ const Tab = createBottomTabNavigator<RootTabParamList>();
 
 export default function App() {
   const navigationRef = useRef<NavigationContainerRef<RootTabParamList>>(null);
+  const pendingNavigation = useRef<(() => void) | null>(null);
+
+  const navigateToHome = useCallback(() => {
+    if (navigationRef.current?.isReady()) {
+      navigationRef.current.navigate("Home");
+    } else {
+      pendingNavigation.current = () => navigationRef.current?.navigate("Home");
+    }
+  }, []);
 
   useEffect(() => {
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response?.notification.request.content.data?.screen === "Home") {
+        navigateToHome();
+      }
+    });
+
     const subscription = Notifications.addNotificationResponseReceivedListener(
       (response) => {
         const data = response.notification.request.content.data as
           | { itemId?: number; screen?: string }
           | undefined;
-
-        if (
-          data?.screen === "Home"
-          && navigationRef.current?.isReady()
-        ) {
-          navigationRef.current.navigate("Home");
+        if (data?.screen === "Home") {
+          navigateToHome();
         }
       },
     );
 
     return () => subscription.remove();
-  }, []);
+  }, [navigateToHome]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="auto" />
         <DatabaseProvider>
-          <NavigationContainer ref={navigationRef}>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={() => {
+              if (pendingNavigation.current) {
+                pendingNavigation.current();
+                pendingNavigation.current = null;
+              }
+            }}
+          >
             <Tab.Navigator id="root-tabs" initialRouteName="Home">
               <Tab.Screen
                 name="Home"

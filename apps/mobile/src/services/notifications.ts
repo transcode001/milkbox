@@ -27,7 +27,7 @@ async function readNotificationIds(): Promise<NotificationIdsByItem> {
 
   try {
     const parsed: unknown = JSON.parse(value);
-    return parsed && typeof parsed === "object"
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as NotificationIdsByItem)
       : {};
   } catch {
@@ -108,19 +108,16 @@ export function createReminderDate(item: SavedItem): Date | null {
   const sourceDate = new Date(source);
   if (Number.isNaN(sourceDate.getTime())) return null;
 
-  if (source.includes("T")) {
+  if (source.includes("T") || source.includes(" ")) {
     return sourceDate;
   }
 
-  return new Date(
-    sourceDate.getFullYear(),
-    sourceDate.getMonth(),
-    sourceDate.getDate(),
-    REMINDER_HOUR,
-    0,
-    0,
-    0,
-  );
+  // "YYYY-MM-DD" is parsed as UTC midnight; extract components from the string
+  // directly to avoid a day-shift in UTC- timezones.
+  const parts = source.split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day, REMINDER_HOUR, 0, 0, 0);
 }
 
 export function shouldScheduleNotification(item: SavedItem): boolean {
@@ -161,26 +158,33 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
     const weekdays = parseWeekdays(item.weekdays);
 
     if (weekdays.length > 0) {
-      // startDate に時刻が含まれていればその時刻を使い、なければ9時固定
-      const notifyHour = item.startDate?.includes("T")
-        ? new Date(item.startDate).getHours()
+      const startHasTime = item.startDate?.includes("T") || item.startDate?.includes(" ");
+      const notifyHour = startHasTime
+        ? new Date(item.startDate!).getHours()
         : REMINDER_HOUR;
-      const notifyMinute = item.startDate?.includes("T")
-        ? new Date(item.startDate).getMinutes()
+      const notifyMinute = startHasTime
+        ? new Date(item.startDate!).getMinutes()
         : 0;
 
-      for (const weekday of weekdays) {
-        const identifier = await Notifications.scheduleNotificationAsync({
-          content,
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: weekday + 1,
-            hour: notifyHour,
-            minute: notifyMinute,
-            channelId: TASK_REMINDERS_CHANNEL_ID,
-          },
-        });
-        identifiers.push(identifier);
+      try {
+        for (const weekday of weekdays) {
+          const identifier = await Notifications.scheduleNotificationAsync({
+            content,
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+              weekday: weekday + 1,
+              hour: notifyHour,
+              minute: notifyMinute,
+              channelId: TASK_REMINDERS_CHANNEL_ID,
+            },
+          });
+          identifiers.push(identifier);
+        }
+      } catch (error) {
+        await Promise.allSettled(
+          identifiers.map((id) => Notifications.cancelScheduledNotificationAsync(id)),
+        );
+        throw error;
       }
     } else {
       const reminderDate = createReminderDate(item);

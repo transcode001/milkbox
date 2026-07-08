@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { Text, View } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import { initializeNotificationsAsync } from "../services/notifications";
@@ -67,7 +68,13 @@ export const DatabaseProvider = ({ children }: React.PropsWithChildren) => {
   );
 
   if (initError) {
-    throw initError;
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", padding: 24 }}>
+        <Text style={{ fontSize: 16, textAlign: "center" }}>
+          データベースの初期化に失敗しました
+        </Text>
+      </View>
+    );
   }
 
   if (!isInitialized) {

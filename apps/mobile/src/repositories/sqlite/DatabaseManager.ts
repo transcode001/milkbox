@@ -58,6 +58,8 @@ export class DatabaseManager {
       } catch (error) {
         console.warn(`Notification scheduling failed for item ${item.id}`, error);
       }
+    } else {
+      await cancelTaskNotificationsAsync(id);
     }
   }
 
