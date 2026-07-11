@@ -66,9 +66,9 @@ export class SQLiteCategoryRepository {
     return {
       id: result.lastInsertRowId,
       name,
-      weekdays,
-      startDate,
-      endDate,
+      weekdays: weekdays ?? null,
+      startDate: startDate ?? null,
+      endDate: endDate ?? null,
     };
   }
 

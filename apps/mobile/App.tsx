@@ -31,7 +31,7 @@ export default function App() {
 
   useEffect(() => {
     void Notifications.getLastNotificationResponseAsync().then((response) => {
-      if (response?.notification.request.content.data?.screen === "Home") {
+      if (response?.notification?.request?.content?.data?.screen === "Home") {
         navigateToHome();
       }
     });

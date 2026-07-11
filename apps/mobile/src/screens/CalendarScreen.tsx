@@ -39,8 +39,13 @@ function createDateKey(date: Date): string {
 }
 
 function toDateKey(value: string): string {
-  if (value.includes("T")) {
-    return value.split("T")[0];
+  if (value.includes("T") || value.includes(" ")) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
   return value;
 }
