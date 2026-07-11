@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert } from "react-native";
-import type { Category } from "../repositories/sqlite/CategoryRepository";
+import type { Category } from "@milkbox/shared";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 
 export type DeleteCategoryMode = "delete" | "uncategorize";

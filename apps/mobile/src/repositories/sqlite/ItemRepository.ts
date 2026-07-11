@@ -213,7 +213,7 @@ export class SQLiteItemRepository implements IItemRepository {
   async update(id: number, data: UpdateItemDto): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     const updates: string[] = [];
-    const params: (string | number)[] = [];
+    const params: (string | number | null)[] = [];
 
     if (data.text !== undefined) {
       updates.push('text = ?');
@@ -222,6 +222,22 @@ export class SQLiteItemRepository implements IItemRepository {
     if (data.notificationEnabled !== undefined) {
       updates.push('notificationEnabled = ?');
       params.push(data.notificationEnabled ? 1 : 0);
+    }
+    if (data.startDate !== undefined) {
+      updates.push('startDate = ?');
+      params.push(data.startDate ?? null);
+    }
+    if (data.endDate !== undefined) {
+      updates.push('endDate = ?');
+      params.push(data.endDate ?? null);
+    }
+    if (data.weekdays !== undefined) {
+      updates.push('weekdays = ?');
+      params.push(data.weekdays ?? null);
+    }
+    if (data.categoryId !== undefined) {
+      updates.push('categoryId = ?');
+      params.push(data.categoryId ?? null);
     }
     if (updates.length === 0) return;
 
