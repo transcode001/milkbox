@@ -85,15 +85,6 @@ export const useDatePicker = (): UseDatePickerResult => {
   };
 
   const openDatePicker = (field: DateField, mode: DatePickerMode = "date") => {
-    const currentValue = field === "start" ? startDate : endDate;
-    if (!currentValue) {
-      if (field === "start") {
-        setStartDate(new Date());
-      } else {
-        setEndDate(new Date());
-      }
-    }
-
     setActiveDatePicker({ field, mode });
   };
 
@@ -106,7 +97,10 @@ export const useDatePicker = (): UseDatePickerResult => {
   };
 
   const formatDate = (date: Date): string => {
-    return date.toISOString().split("T")[0];
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   };
 
   const formatTime = (date: Date): string => {

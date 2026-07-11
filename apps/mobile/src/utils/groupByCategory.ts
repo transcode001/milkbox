@@ -11,7 +11,7 @@ export const groupByCategory = (items: SavedItem[]): CategorySection[] => {
   const sections = new Map<string, SavedItem[]>();
 
   for (const item of items) {
-    const categoryName = item.categoryName || UNCATEGORIZED_LABEL;
+    const categoryName = item.categoryName ?? UNCATEGORIZED_LABEL;
     const existing = sections.get(categoryName);
 
     if (existing) {

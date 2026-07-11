@@ -72,13 +72,18 @@ export async function cancelTaskNotificationsAsync(itemId: number): Promise<void
     const idsByItem = await readNotificationIds();
     const identifiers = idsByItem[String(itemId)] ?? [];
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       identifiers.map((identifier) =>
         Notifications.cancelScheduledNotificationAsync(identifier),
       ),
     );
 
-    delete idsByItem[String(itemId)];
+    const remaining = identifiers.filter((_, index) => results[index]?.status === "rejected");
+    if (remaining.length === 0) {
+      delete idsByItem[String(itemId)];
+    } else {
+      idsByItem[String(itemId)] = remaining;
+    }
     await writeNotificationIds(idsByItem);
   } catch (error) {
     console.warn(`Failed to cancel notifications for item ${itemId}`, error);
@@ -102,22 +107,35 @@ export async function cancelAllTaskNotificationsAsync(): Promise<void> {
 }
 
 export function createReminderDate(item: SavedItem): Date | null {
-  const source = item.startDate ?? item.endDate;
-  if (!source) return null;
+  if (item.startDate) {
+    const startDate = new Date(item.startDate);
+    if (Number.isNaN(startDate.getTime())) return null;
 
-  const sourceDate = new Date(source);
-  if (Number.isNaN(sourceDate.getTime())) return null;
+    if (item.startDate.includes("T") || item.startDate.includes(" ")) {
+      return startDate;
+    }
 
-  if (source.includes("T") || source.includes(" ")) {
-    return sourceDate;
+    const parts = item.startDate.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    const [year, month, day] = parts;
+    return new Date(year, month - 1, day, REMINDER_HOUR, 0, 0, 0);
   }
 
-  // "YYYY-MM-DD" is parsed as UTC midnight; extract components from the string
-  // directly to avoid a day-shift in UTC- timezones.
-  const parts = source.split("-").map(Number);
-  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-  const [year, month, day] = parts;
-  return new Date(year, month - 1, day, REMINDER_HOUR, 0, 0, 0);
+  if (item.endDate) {
+    const endDate = new Date(item.endDate);
+    if (Number.isNaN(endDate.getTime())) return null;
+    return new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate(),
+      REMINDER_HOUR,
+      0,
+      0,
+      0,
+    );
+  }
+
+  return null;
 }
 
 export function shouldScheduleNotification(item: SavedItem): boolean {
@@ -201,9 +219,16 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
       identifiers.push(identifier);
     }
 
-    const idsByItem = await readNotificationIds();
-    idsByItem[String(item.id)] = identifiers;
-    await writeNotificationIds(idsByItem);
+    try {
+      const idsByItem = await readNotificationIds();
+      idsByItem[String(item.id)] = identifiers;
+      await writeNotificationIds(idsByItem);
+    } catch (writeError) {
+      await Promise.allSettled(
+        identifiers.map((id) => Notifications.cancelScheduledNotificationAsync(id)),
+      );
+      throw writeError;
+    }
 
     return identifiers;
   } catch (error) {

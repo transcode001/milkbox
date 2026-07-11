@@ -22,6 +22,7 @@ import type { RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
+import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 
 type Props = BottomTabScreenProps<RootTabParamList, "Home">;
 
@@ -47,6 +48,13 @@ const formatDateOnly = (value: Date | null): string => {
   const month = String(value.getMonth() + 1).padStart(2, "0");
   const day = String(value.getDate()).padStart(2, "0");
   return `${year}.${month}.${day}`;
+};
+
+const toLocalDateString = (value: Date): string => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 };
 
 const formatCategoryWeekdays = (section: CategorySection, category?: Category): string | null => {
@@ -166,6 +174,11 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
+    if (isEndDateBeforeStartDate(editCategoryStartDate, editCategoryEndDate)) {
+      Alert.alert("エラー", "終了日が開始日より前です。終了日を再設定してください。");
+      return;
+    }
+
     try {
       await dbManager.updateCategory(
         editingCategory.id,
@@ -173,8 +186,8 @@ const HomeScreen = ({ navigation }: Props) => {
         editCategoryWeekdays.length > 0
           ? JSON.stringify(editCategoryWeekdays)
           : null,
-        editCategoryStartDate?.toISOString().split("T")[0] ?? null,
-        editCategoryEndDate?.toISOString().split("T")[0] ?? null,
+        editCategoryStartDate ? toLocalDateString(editCategoryStartDate) : null,
+        editCategoryEndDate ? toLocalDateString(editCategoryEndDate) : null,
       );
       setEditingCategory(null);
       await loadItems();
@@ -185,6 +198,11 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleUpdateItem = async () => {
     if (!editingItem) return;
+    if (isEndDateBeforeStartDate(editItemStartDate, editItemEndDate)) {
+      Alert.alert("エラー", "終了日時が開始日時より前です。終了日時を再設定してください。");
+      return;
+    }
+
     try {
       await dbManager.updateItem(editingItem.id, {
         text: editItemText || undefined,

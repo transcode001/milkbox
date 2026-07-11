@@ -78,7 +78,15 @@ export class DatabaseManager {
 
     const items = await this.itemRepository.findAll();
     const targets = items.filter((item) => item.categoryId === id);
-    await Promise.all(targets.map((item) => scheduleTaskNotificationsAsync(item)));
+    await Promise.all(
+      targets.map(async (item) => {
+        try {
+          await scheduleTaskNotificationsAsync(item);
+        } catch (error) {
+          console.warn(`Notification scheduling failed for item ${item.id}`, error);
+        }
+      }),
+    );
   }
 
   async deleteItem(id: number): Promise<void> {
