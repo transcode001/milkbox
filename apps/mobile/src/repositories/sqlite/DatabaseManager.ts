@@ -6,7 +6,6 @@ import {
   cancelAllTaskNotificationsAsync,
   cancelTaskNotificationsAsync,
   scheduleTaskNotificationsAsync,
-  shouldScheduleNotification,
 } from '../../services/notifications';
 
 export class DatabaseManager {
@@ -49,6 +48,7 @@ export class DatabaseManager {
 
   // 注意: タスク編集機能を実装する場合、itemRepository.update() を直接呼ばずに
   // 必ず DatabaseManager.updateItem() を使用すること。
+  // UpdateItemDto は text・notificationEnabled・startDate・endDate・weekdays・categoryId を更新できる。
   // updateItem() は更新後に通知の再スケジュール（scheduleTaskNotificationsAsync）まで行う。
   async updateItem(id: number, data: UpdateItemDto): Promise<void> {
     await this.itemRepository.update(id, data);
@@ -59,7 +59,34 @@ export class DatabaseManager {
       } catch (error) {
         console.warn(`Notification scheduling failed for item ${item.id}`, error);
       }
+    } else {
+      await cancelTaskNotificationsAsync(id);
     }
+  }
+
+  // 注意: カテゴリ編集機能を実装する場合、categoryRepository.update() を直接呼ばずに
+  // 必ず DatabaseManager.updateCategory() を使用すること。
+  // updateCategory() はカテゴリ配下の全サブタスクの通知を再スケジュールする。
+  async updateCategory(
+    id: number,
+    name?: string,
+    weekdays?: string | null,
+    startDate?: string | null,
+    endDate?: string | null,
+  ): Promise<void> {
+    await this.categoryRepository.update(id, name, weekdays, startDate, endDate);
+
+    const items = await this.itemRepository.findAll();
+    const targets = items.filter((item) => item.categoryId === id);
+    await Promise.all(
+      targets.map(async (item) => {
+        try {
+          await scheduleTaskNotificationsAsync(item);
+        } catch (error) {
+          console.warn(`Notification scheduling failed for item ${item.id}`, error);
+        }
+      }),
+    );
   }
 
   async deleteItem(id: number): Promise<void> {
@@ -79,9 +106,8 @@ export class DatabaseManager {
 
   async syncTaskNotifications(): Promise<void> {
     const items = await this.itemRepository.findAll();
-    const targets = items.filter((item) => shouldScheduleNotification(item));
 
-    for (const item of targets) {
+    for (const item of items) {
       try {
         await scheduleTaskNotificationsAsync(item);
       } catch (error) {

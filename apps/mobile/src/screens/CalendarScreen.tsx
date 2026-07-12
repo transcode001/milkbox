@@ -39,8 +39,13 @@ function createDateKey(date: Date): string {
 }
 
 function toDateKey(value: string): string {
-  if (value.includes("T")) {
-    return value.split("T")[0];
+  if (value.includes("T") || value.includes(" ")) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return value;
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
   return value;
 }
@@ -91,6 +96,9 @@ function formatScheduleTime(item: SavedItem): string {
   }
 
   const source = item.startDate ?? item.endDate ?? item.date;
+  if (!source) {
+    return "終日";
+  }
   if (!source.includes("T")) {
     return "終日";
   }
@@ -108,6 +116,19 @@ function isMultiDayRange(item: SavedItem): boolean {
   const e = parseItemDate(item.endDate);
   if (!s || !e) return false;
   return s.getTime() !== e.getTime();
+}
+
+function parsePointDate(value?: string): Date | null {
+  if (!value) return null;
+
+  if (!value.includes("T") && !value.includes(" ")) {
+    const parts = value.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    return new Date(parts[0], parts[1] - 1, parts[2], 9, 0, 0, 0);
+  }
+
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function hashColorIdx(key: string | undefined): number {
@@ -264,18 +285,20 @@ const CalendarScreen = () => {
       }
 
       const itemWeekdays = parseWeekdays(item.weekdays);
-      if (item.categoryName && itemWeekdays.length > 0) {
+      if (itemWeekdays.length > 0) {
         weekday.push(item);
-        const existing = weekdayBarMap.get(item.categoryName);
-        if (existing) {
-          for (const weekdayValue of itemWeekdays) {
-            existing.weekdays.add(weekdayValue);
+        if (item.categoryName) {
+          const existing = weekdayBarMap.get(item.categoryName);
+          if (existing) {
+            for (const weekdayValue of itemWeekdays) {
+              existing.weekdays.add(weekdayValue);
+            }
+          } else {
+            weekdayBarMap.set(item.categoryName, {
+              item,
+              weekdays: new Set(itemWeekdays),
+            });
           }
-        } else {
-          weekdayBarMap.set(item.categoryName, {
-            item,
-            weekdays: new Set(itemWeekdays),
-          });
         }
         continue;
       }
@@ -285,8 +308,9 @@ const CalendarScreen = () => {
         continue;
       }
 
-      if (!item.startDate && !item.endDate) continue;
-      const key = item.startDate ? toDateKey(item.startDate) : toDateKey(item.endDate!);
+      const pointDate = parsePointDate(item.startDate ?? item.endDate ?? item.date);
+      if (!pointDate) continue;
+      const key = createDateKey(pointDate);
 
       const list = point.get(key) ?? [];
       list.push(item);
@@ -328,8 +352,8 @@ const CalendarScreen = () => {
     result.push(...(pointItemsByDate.get(selectedDateKey) ?? []));
 
     return result.sort((left, right) => {
-      const leftTime = new Date(left.startDate ?? left.endDate ?? left.date).getTime();
-      const rightTime = new Date(right.startDate ?? right.endDate ?? right.date).getTime();
+      const leftTime = parsePointDate(left.startDate ?? left.endDate ?? left.date)?.getTime() ?? 0;
+      const rightTime = parsePointDate(right.startDate ?? right.endDate ?? right.date)?.getTime() ?? 0;
       return leftTime - rightTime;
     });
   }, [rangeItems, weekdayItems, pointItemsByDate, selectedDate, selectedDateKey]);

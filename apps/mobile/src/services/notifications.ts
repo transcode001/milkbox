@@ -27,7 +27,7 @@ async function readNotificationIds(): Promise<NotificationIdsByItem> {
 
   try {
     const parsed: unknown = JSON.parse(value);
-    return parsed && typeof parsed === "object"
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
       ? (parsed as NotificationIdsByItem)
       : {};
   } catch {
@@ -72,13 +72,18 @@ export async function cancelTaskNotificationsAsync(itemId: number): Promise<void
     const idsByItem = await readNotificationIds();
     const identifiers = idsByItem[String(itemId)] ?? [];
 
-    await Promise.allSettled(
+    const results = await Promise.allSettled(
       identifiers.map((identifier) =>
         Notifications.cancelScheduledNotificationAsync(identifier),
       ),
     );
 
-    delete idsByItem[String(itemId)];
+    const remaining = identifiers.filter((_, index) => results[index]?.status === "rejected");
+    if (remaining.length === 0) {
+      delete idsByItem[String(itemId)];
+    } else {
+      idsByItem[String(itemId)] = remaining;
+    }
     await writeNotificationIds(idsByItem);
   } catch (error) {
     console.warn(`Failed to cancel notifications for item ${itemId}`, error);
@@ -102,28 +107,40 @@ export async function cancelAllTaskNotificationsAsync(): Promise<void> {
 }
 
 export function createReminderDate(item: SavedItem): Date | null {
-  const source = item.startDate ?? item.endDate;
-  if (!source) return null;
+  if (item.startDate) {
+    const startDate = new Date(item.startDate);
+    if (Number.isNaN(startDate.getTime())) return null;
 
-  const sourceDate = new Date(source);
-  if (Number.isNaN(sourceDate.getTime())) return null;
+    if (item.startDate.includes("T") || item.startDate.includes(" ")) {
+      return startDate;
+    }
 
-  if (source.includes("T")) {
-    return sourceDate;
+    const parts = item.startDate.split("-").map(Number);
+    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+    const [year, month, day] = parts;
+    return new Date(year, month - 1, day, REMINDER_HOUR, 0, 0, 0);
   }
 
-  return new Date(
-    sourceDate.getFullYear(),
-    sourceDate.getMonth(),
-    sourceDate.getDate(),
-    REMINDER_HOUR,
-    0,
-    0,
-    0,
-  );
+  if (item.endDate) {
+    const endDate = new Date(item.endDate);
+    if (Number.isNaN(endDate.getTime())) return null;
+    return new Date(
+      endDate.getFullYear(),
+      endDate.getMonth(),
+      endDate.getDate(),
+      REMINDER_HOUR,
+      0,
+      0,
+      0,
+    );
+  }
+
+  return null;
 }
 
 export function shouldScheduleNotification(item: SavedItem): boolean {
+  if (!item.notificationEnabled) return false;
+
   const weekdays = parseWeekdays(item.weekdays);
   if (weekdays.length > 0) {
     // 曜日繰り返しは常に対象（直近の発生日が必ず未来にあるため）
@@ -139,6 +156,8 @@ export function shouldScheduleNotification(item: SavedItem): boolean {
 export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<string[]> {
   try {
     await cancelTaskNotificationsAsync(item.id);
+
+    if (!item.notificationEnabled) return [];
 
     const hasPermission = await ensureNotificationPermission();
     if (!hasPermission) return [];
@@ -157,18 +176,33 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
     const weekdays = parseWeekdays(item.weekdays);
 
     if (weekdays.length > 0) {
-      for (const weekday of weekdays) {
-        const identifier = await Notifications.scheduleNotificationAsync({
-          content,
-          trigger: {
-            type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-            weekday: weekday + 1,
-            hour: REMINDER_HOUR,
-            minute: 0,
-            channelId: TASK_REMINDERS_CHANNEL_ID,
-          },
-        });
-        identifiers.push(identifier);
+      const startHasTime = item.startDate?.includes("T") || item.startDate?.includes(" ");
+      const notifyHour = startHasTime
+        ? new Date(item.startDate!).getHours()
+        : REMINDER_HOUR;
+      const notifyMinute = startHasTime
+        ? new Date(item.startDate!).getMinutes()
+        : 0;
+
+      try {
+        for (const weekday of weekdays) {
+          const identifier = await Notifications.scheduleNotificationAsync({
+            content,
+            trigger: {
+              type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+              weekday: weekday + 1,
+              hour: notifyHour,
+              minute: notifyMinute,
+              channelId: TASK_REMINDERS_CHANNEL_ID,
+            },
+          });
+          identifiers.push(identifier);
+        }
+      } catch (error) {
+        await Promise.allSettled(
+          identifiers.map((id) => Notifications.cancelScheduledNotificationAsync(id)),
+        );
+        throw error;
       }
     } else {
       const reminderDate = createReminderDate(item);
@@ -185,9 +219,16 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
       identifiers.push(identifier);
     }
 
-    const idsByItem = await readNotificationIds();
-    idsByItem[String(item.id)] = identifiers;
-    await writeNotificationIds(idsByItem);
+    try {
+      const idsByItem = await readNotificationIds();
+      idsByItem[String(item.id)] = identifiers;
+      await writeNotificationIds(idsByItem);
+    } catch (writeError) {
+      await Promise.allSettled(
+        identifiers.map((id) => Notifications.cancelScheduledNotificationAsync(id)),
+      );
+      throw writeError;
+    }
 
     return identifiers;
   } catch (error) {

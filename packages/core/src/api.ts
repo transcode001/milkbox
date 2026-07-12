@@ -17,7 +17,7 @@ export const createApiClient = (baseUrl: string) => {
         return { data, status: response.status };
       } catch (error) {
         return {
-          data: null as any,
+          data: null as T,
           error: error instanceof Error ? error.message : "Unknown error",
           status: 500,
         };
@@ -34,7 +34,7 @@ export const createApiClient = (baseUrl: string) => {
         return { data, status: response.status };
       } catch (error) {
         return {
-          data: null as any,
+          data: null as T,
           error: error instanceof Error ? error.message : "Unknown error",
           status: 500,
         };

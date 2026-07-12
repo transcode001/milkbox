@@ -6,21 +6,28 @@ export interface CategorySection {
 }
 
 const UNCATEGORIZED_LABEL = "タスク指定なし";
+const UNCATEGORIZED_KEY = "__uncategorized__";
 
 export const groupByCategory = (items: SavedItem[]): CategorySection[] => {
   const sections = new Map<string, SavedItem[]>();
 
   for (const item of items) {
-    const categoryName = item.categoryName || UNCATEGORIZED_LABEL;
-    const existing = sections.get(categoryName);
+    const key = item.categoryId != null ? String(item.categoryId) : UNCATEGORIZED_KEY;
+    const existing = sections.get(key);
 
     if (existing) {
       existing.push(item);
       continue;
     }
 
-    sections.set(categoryName, [item]);
+    sections.set(key, [item]);
   }
 
-  return Array.from(sections, ([title, data]) => ({ title, data }));
+  return Array.from(sections.values()).map((data) => ({
+    title:
+      data[0].categoryId != null
+        ? (data[0].categoryName ?? "")
+        : UNCATEGORIZED_LABEL,
+    data,
+  }));
 };

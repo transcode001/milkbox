@@ -2,6 +2,10 @@
 import * as SQLite from 'expo-sqlite';
 import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 
+type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled'> & {
+  notificationEnabled?: boolean | number;
+};
+
 export class SQLiteItemRepository implements IItemRepository {
   private db: SQLite.SQLiteDatabase | null = null;
 
@@ -26,6 +30,7 @@ export class SQLiteItemRepository implements IItemRepository {
         startDate TEXT,
         endDate TEXT,
         weekdays TEXT,
+        notificationEnabled INTEGER NOT NULL DEFAULT 1,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -38,9 +43,16 @@ export class SQLiteItemRepository implements IItemRepository {
     const tableInfo = await this.db.getAllAsync<TableInfoRow>('PRAGMA table_info(items);');
     const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
     const weekdaysColumn = tableInfo.find((column) => column.name === 'weekdays');
+    const notificationEnabledColumn = tableInfo.find((column) => column.name === 'notificationEnabled');
 
     if (!weekdaysColumn) {
       await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
+    }
+
+    if (!notificationEnabledColumn) {
+      await this.db.execAsync(
+        'ALTER TABLE items ADD COLUMN notificationEnabled INTEGER NOT NULL DEFAULT 1;'
+      );
     }
 
     // Migrate older table definitions where categoryId was NOT NULL.
@@ -107,16 +119,25 @@ export class SQLiteItemRepository implements IItemRepository {
           startDate TEXT,
           endDate TEXT,
           weekdays TEXT,
+          notificationEnabled INTEGER NOT NULL DEFAULT 1,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
       `);
       await this.db.execAsync(`
-        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays)
-        SELECT id, categoryId, text, date, startDate, endDate, weekdays FROM items;
+        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled)
+        SELECT id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled FROM items;
       `);
       await this.db.execAsync('DROP TABLE IF EXISTS items;');
       await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
     });
+  }
+
+  private normalizeItem(row: SQLiteSavedItemRow): SavedItem {
+    return {
+      ...row,
+      notificationEnabled:
+        row.notificationEnabled !== false && row.notificationEnabled !== 0,
+    };
   }
 
   async clear(): Promise<void> {
@@ -127,14 +148,15 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async findAll(): Promise<SavedItem[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return await this.db.getAllAsync<SavedItem>(
+    const rows = await this.db.getAllAsync<SQLiteSavedItemRow>(
       'SELECT * FROM items ORDER BY id DESC'
     );
+    return rows.map((row) => this.normalizeItem(row));
   }
 
   async findAllWithCategory(): Promise<SavedItem[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return await this.db.getAllAsync<SavedItem>(`
+    const rows = await this.db.getAllAsync<SQLiteSavedItemRow>(`
       SELECT 
         items.id,
         items.categoryId,
@@ -143,26 +165,29 @@ export class SQLiteItemRepository implements IItemRepository {
         items.startDate,
         items.endDate,
         items.weekdays,
+        items.notificationEnabled,
         categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
       ORDER BY categories.name, items.id DESC
     `);
+    return rows.map((row) => this.normalizeItem(row));
   }
 
   async findById(id: number): Promise<SavedItem | null> {
     if (!this.db) throw new Error('Database not initialized');
-    const result = await this.db.getFirstAsync<SavedItem>(
+    const result = await this.db.getFirstAsync<SQLiteSavedItemRow>(
       'SELECT * FROM items WHERE id = ?',
       [id]
     );
-    return result || null;
+    return result ? this.normalizeItem(result) : null;
   }
 
   async create(data: CreateItemDto): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
+    const notificationEnabled = data.notificationEnabled !== false;
     const result = await this.db.runAsync(
-      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays) VALUES (?, ?, ?, ?, ?, ?)',
+      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays, notificationEnabled) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [
         data.categoryId ?? null,
         data.text,
@@ -170,6 +195,7 @@ export class SQLiteItemRepository implements IItemRepository {
         data.startDate ?? null,
         data.endDate ?? null,
         data.weekdays ?? null,
+        notificationEnabled ? 1 : 0,
       ]
     );
     return {
@@ -180,17 +206,45 @@ export class SQLiteItemRepository implements IItemRepository {
       startDate: data.startDate,
       endDate: data.endDate,
       weekdays: data.weekdays,
+      notificationEnabled,
     };
   }
 
   async update(id: number, data: UpdateItemDto): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+    const updates: string[] = [];
+    const params: (string | number | null)[] = [];
+
     if (data.text !== undefined) {
-      await this.db.runAsync(
-        'UPDATE items SET text = ? WHERE id = ?',
-        [data.text, id]
-      );
+      updates.push('text = ?');
+      params.push(data.text);
     }
+    if (data.notificationEnabled !== undefined) {
+      updates.push('notificationEnabled = ?');
+      params.push(data.notificationEnabled ? 1 : 0);
+    }
+    if (data.startDate !== undefined) {
+      updates.push('startDate = ?');
+      params.push(data.startDate ?? null);
+    }
+    if (data.endDate !== undefined) {
+      updates.push('endDate = ?');
+      params.push(data.endDate ?? null);
+    }
+    if (data.weekdays !== undefined) {
+      updates.push('weekdays = ?');
+      params.push(data.weekdays ?? null);
+    }
+    if (data.categoryId !== undefined) {
+      updates.push('categoryId = ?');
+      params.push(data.categoryId ?? null);
+    }
+    if (updates.length === 0) return;
+
+    await this.db.runAsync(
+      `UPDATE items SET ${updates.join(', ')} WHERE id = ?`,
+      [...params, id]
+    );
   }
 
   async delete(id: number): Promise<void> {

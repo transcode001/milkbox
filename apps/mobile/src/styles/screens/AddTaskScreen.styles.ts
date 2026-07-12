@@ -38,14 +38,8 @@ export const styles = StyleSheet.create({
     marginBottom: 6,
   },
   dateRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  dateRowStacked: {
     flexDirection: "column",
-  },
-  dateColumn: {
-    flex: 1,
+    gap: 12,
   },
   dateControlRow: {
     flexDirection: "row",

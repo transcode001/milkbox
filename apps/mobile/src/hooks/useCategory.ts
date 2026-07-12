@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert } from "react-native";
-import type { Category } from "../repositories/sqlite/CategoryRepository";
+import type { Category } from "@milkbox/shared";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 
 export type DeleteCategoryMode = "delete" | "uncategorize";
@@ -54,7 +54,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
 
         return prevSelectedOption;
       });
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to load categories");
     }
   }, [dbManager]);
@@ -71,7 +71,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       setShowAddCategoryModal(false);
       await loadCategories();
       Alert.alert("Success", "Category added!");
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to add category");
     }
   }, [dbManager, loadCategories, newCategoryName]);
@@ -94,7 +94,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         await dbManager.categoryRepository.delete(categoryId);
         setSelectedOption("");
         await Promise.all([loadCategories(), loadItems()]);
-      } catch (error) {
+      } catch {
         Alert.alert("Error", "タスクの削除に失敗しました");
       }
     },

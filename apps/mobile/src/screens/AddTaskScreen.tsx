@@ -1,11 +1,11 @@
-import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, useWindowDimensions, Keyboard, TouchableWithoutFeedback, KeyboardAvoidingView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, Keyboard, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useMemo, useState } from "react";
-import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { styles } from "../styles/screens/AddTaskScreen.styles";
-import type { RootTabParamList } from "../navigation/types";
+import type { RootStackParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { DeleteCategoryMode, useCategory } from "../hooks/useCategory";
 import { useDatePicker } from "../hooks/useDatePicker";
@@ -13,7 +13,7 @@ import { useItemForm } from "../hooks/useItemForm";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 
-type Props = BottomTabScreenProps<RootTabParamList, "AddTask">;
+type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: "日" },
@@ -51,8 +51,6 @@ const formatSavedItemDateRange = (item: { startDate?: string; endDate?: string; 
 };
 
 const AddTaskScreen = ({ navigation }: Props) => {
-  const { width } = useWindowDimensions();
-  const isNarrowScreen = width < 360;
   const { dbManager } = useDatabaseManager();
   const {
     categories,
@@ -84,11 +82,20 @@ const AddTaskScreen = ({ navigation }: Props) => {
     formatDate,
     formatTime,
   } = useDatePicker();
-  const { text, items, setText, loadItems, deleteItem } = useItemForm({ dbManager });
+  const {
+    text,
+    items,
+    setText,
+    loadItems,
+    deleteItem,
+    toggleItemNotification,
+    togglingNotificationItemId,
+  } = useItemForm({ dbManager });
   const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
+  const [notificationEnabled, setNotificationEnabled] = useState(true);
 
   const inheritedWeekdays = useMemo(() => {
     if (!selectedOption) return [];
@@ -155,12 +162,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
         endDate: endDate?.toISOString(),
         weekdays: noCategoryChecked ? undefined : JSON.stringify(effectiveWeekdays),
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
+        notificationEnabled,
       });
 
       setText("");
       setStartDate(null);
       setEndDate(null);
       setSelectedWeekdays([]);
+      setNotificationEnabled(true);
       setActiveDatePicker(null);
       await loadItems();
       setShowPostSubmitModal(true);
@@ -205,7 +214,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
               <TouchableOpacity
                 onPress={() => {
                   setShowPostSubmitModal(false);
-                  navigation.navigate("Home");
+                  navigation.popTo("Tabs", { screen: "Home" });
                 }}
                 style={[styles.modalButton, styles.modalButtonSubmit]}
               >
@@ -292,7 +301,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
         </View>
       </Modal>
 
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <KeyboardAvoidingView
           style={styles.content}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -392,8 +400,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
-                  <View style={[styles.dateRow, isNarrowScreen && styles.dateRowStacked]}>
-                    <View style={styles.dateColumn}>
+                  <View style={styles.dateRow}>
+                    <View>
                       <Text style={styles.dateLabel}>開始日時</Text>
                       <View style={styles.dateControlRow}>
                         <TouchableOpacity
@@ -421,7 +429,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                         </TouchableOpacity>
                       </View>
                     </View>
-                    <View style={styles.dateColumn}>
+                    <View>
                       <Text style={styles.dateLabel}>終了日時</Text>
                       <View style={styles.dateControlRow}>
                         <TouchableOpacity
@@ -516,6 +524,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   )}
                   {dateError && <Text style={styles.errorText}>{dateError}</Text>}
                   <TouchableOpacity
+                    style={styles.checkboxRow}
+                    onPress={() => setNotificationEnabled((prev) => !prev)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.checkbox, notificationEnabled && styles.checkboxChecked]}>
+                      {notificationEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                    </View>
+                    <Text style={styles.checkboxLabel}>通知</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => {
                       void handleSubmit();
@@ -546,6 +564,19 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   </Text>
                 </View>
                 <TouchableOpacity
+                  style={styles.checkboxRow}
+                  onPress={() => {
+                    void toggleItemNotification(item.id, !item.notificationEnabled);
+                  }}
+                  disabled={togglingNotificationItemId !== null}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.checkbox, item.notificationEnabled && styles.checkboxChecked]}>
+                    {item.notificationEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
+                  </View>
+                  <Text style={styles.checkboxLabel}>通知</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => deleteItem(item.id)}
                 >
@@ -556,7 +587,6 @@ const AddTaskScreen = ({ navigation }: Props) => {
             ListEmptyComponent={<Text style={styles.emptyListText}>保存済みの予定はまだありません。</Text>}
           />
         </KeyboardAvoidingView>
-      </TouchableWithoutFeedback>
     </SafeAreaView>
   );
 };

@@ -1,4 +1,5 @@
 import { app, BrowserWindow } from "electron";
+import squirrelStartup from "electron-squirrel-startup";
 import * as path from "path";
 
 let mainWindow: BrowserWindow | null;
@@ -45,6 +46,6 @@ app.on("activate", () => {
 });
 
 // Handle app squirrel event (Windows installer)
-if (require("electron-squirrel-startup")) {
+if (squirrelStartup) {
   app.quit();
 }
