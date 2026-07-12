@@ -13,18 +13,23 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { Ionicons } from "@expo/vector-icons";
 import type { Category, SavedItem } from "@milkbox/shared";
-import type { RootTabParamList } from "../navigation/types";
+import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 
-type Props = BottomTabScreenProps<RootTabParamList, "Home">;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<RootTabParamList, "Home">,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: "日" },
@@ -486,9 +491,18 @@ const HomeScreen = ({ navigation }: Props) => {
 
       <View style={styles.header}>
         <Text style={styles.title}>タスク</Text>
-        <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
-          <Text style={styles.addTaskButtonText}>追加</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity style={styles.addTaskButton} onPress={handleNavigateAddTask}>
+            <Text style={styles.addTaskButtonText}>追加</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={() => navigation.navigate("Settings")}
+            accessibilityLabel="設定"
+          >
+            <Ionicons name="settings-outline" size={24} color="#333" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {!notificationsEnabled && (
@@ -600,6 +614,14 @@ const styles = StyleSheet.create({
     color: "#666",
     fontSize: 12,
     lineHeight: 18,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  settingsButton: {
+    padding: 4,
   },
   addTaskButton: {
     backgroundColor: "#007AFF",

@@ -12,6 +12,8 @@
     "build:android": "pnpm dlx eas-cli build --platform android --profile android-store",
     "lint": "eslint --max-warnings 0",
     "check-types": "tsc --noEmit",
+    "generate-licenses": "node scripts/generate-licenses.mjs",
+    "eas-build-post-install": "node scripts/generate-licenses.mjs",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },

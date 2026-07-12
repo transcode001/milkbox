@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import globals from "globals";
 import eslintConfigPrettier from "eslint-config-prettier";
 import turboPlugin from "eslint-plugin-turbo";
 import tseslint from "typescript-eslint";
@@ -24,6 +25,13 @@ export const config = [
   {
     plugins: {
       onlyWarn,
+    },
+  },
+  {
+    // 各ワークスペースの scripts/ 配下はNode.jsで実行されるスタンドアロンスクリプト
+    files: ["scripts/**/*.{js,mjs}"],
+    languageOptions: {
+      globals: globals.node,
     },
   },
   {
