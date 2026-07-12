@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, Keyboard, KeyboardAvoidingView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, SectionList, Platform, Modal, Keyboard, KeyboardAvoidingView, Alert, useColorScheme } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -96,6 +96,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const colorScheme = useColorScheme();
+  const pickerItemColor = colorScheme === "dark" ? "#ffffff" : "#000000";
 
   const inheritedWeekdays = useMemo(() => {
     if (!selectedOption) return [];
@@ -381,7 +383,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                         key={category.id}
                         label={category.name}
                         value={category.id.toString()}
-                        color="#333333"
+                        color={pickerItemColor}
                       />
                     ))}
                   </Picker>

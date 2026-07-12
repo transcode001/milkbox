@@ -13,7 +13,7 @@ import { useFocusEffect } from "@react-navigation/native";
 import { SavedItem } from "@milkbox/shared/repositories/types";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
-import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
+import { parseWeekdays } from "../utils/weekdays";
 
 const BAR_PALETTE = [
   { bg: "#3B82F6", border: "#2563EB", light: "#DBEAFE", lightText: "#1D4ED8" },
@@ -90,24 +90,26 @@ function formatMonthLabel(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月`;
 }
 
-function formatScheduleTime(item: SavedItem): string {
-  if (parseWeekdays(item.weekdays).length > 0) {
-    return "毎週";
-  }
-
-  const source = item.startDate ?? item.endDate ?? item.date;
-  if (!source) {
-    return "終日";
-  }
-  if (!source.includes("T")) {
-    return "終日";
-  }
-
-  return new Date(source).toLocaleTimeString("ja-JP", {
+function formatTimeOfDay(value?: string): string | null {
+  if (!value || !value.includes("T")) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleTimeString("ja-JP", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
   });
+}
+
+function formatScheduleTime(item: SavedItem): string {
+  const start = formatTimeOfDay(item.startDate);
+  const end = formatTimeOfDay(item.endDate);
+  if (start && end) return `${start} 〜 ${end}`;
+  if (start) return start;
+  if (end) return `〜 ${end}`;
+  // 曜日繰り返しタスクの date は作成時刻が入るため時間表示には使わない
+  if (parseWeekdays(item.weekdays).length > 0) return "終日";
+  return formatTimeOfDay(item.date) ?? "終日";
 }
 
 function isMultiDayRange(item: SavedItem): boolean {
@@ -575,10 +577,6 @@ const CalendarScreen = () => {
                     {isRange && item.startDate && item.endDate ? (
                       <Text style={localStyles.rangeDateText}>
                         {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
-                      </Text>
-                    ) : item.weekdays ? (
-                      <Text style={localStyles.rangeDateText}>
-                        {formatWeekdayLabels(item.weekdays)}
                       </Text>
                     ) : null}
                   </View>
