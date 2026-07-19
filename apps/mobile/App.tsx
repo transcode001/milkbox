@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import {
   NavigationContainer,
@@ -17,33 +16,24 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import LicensesScreen from "./src/screens/LicensesScreen";
 import type { RootStackParamList, RootTabParamList } from "./src/navigation/types";
 import { DatabaseProvider } from "./src/contexts/DatabaseContext";
+import { BottomTabBar } from "./src/components/BottomTabBar";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const TabNavigator = () => (
-  <Tab.Navigator id="root-tabs" initialRouteName="Home">
+  <Tab.Navigator
+    id="root-tabs"
+    initialRouteName="Home"
+    tabBar={(props) => <BottomTabBar {...props} />}
+  >
     <Tab.Screen
       name="Home"
       component={HomeScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons name="home-outline" size={size} color={color} />
-        ),
-      }}
     />
     <Tab.Screen
       name="Calendar"
       component={CalendarScreen}
-      options={{
-        tabBarIcon: ({ color, size }) => (
-          <Ionicons
-            name="calendar-outline"
-            size={size}
-            color={color}
-          />
-        ),
-      }}
     />
   </Tab.Navigator>
 );

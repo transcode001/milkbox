@@ -12,18 +12,9 @@ import { useDatePicker } from "../hooks/useDatePicker";
 import { useItemForm } from "../hooks/useItemForm";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
+import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
-
-const WEEKDAY_OPTIONS = [
-  { value: 0, label: "日" },
-  { value: 1, label: "月" },
-  { value: 2, label: "火" },
-  { value: 3, label: "水" },
-  { value: 4, label: "木" },
-  { value: 5, label: "金" },
-  { value: 6, label: "土" },
-] as const;
 
 const formatSavedItemDate = (value?: string) => {
   if (!value) return null;
@@ -493,35 +484,11 @@ const AddTaskScreen = ({ navigation }: Props) => {
                           このタスクの登録済み曜日（{formatWeekdayLabels(JSON.stringify(inheritedWeekdays))}）を引き継ぎます。
                         </Text>
                       ) : null}
-                      <View style={styles.weekdayRow}>
-                        {WEEKDAY_OPTIONS.map((weekday) => {
-                          const selected = effectiveWeekdays.includes(weekday.value);
-                          const disabled = inheritedWeekdays.length > 0;
-
-                          return (
-                            <TouchableOpacity
-                              key={weekday.value}
-                              style={[
-                                styles.weekdayButton,
-                                selected && styles.weekdayButtonSelected,
-                                disabled && !selected && styles.weekdayButtonDisabled,
-                              ]}
-                              onPress={() => toggleWeekday(weekday.value)}
-                              disabled={disabled}
-                              activeOpacity={0.8}
-                            >
-                              <Text
-                                style={[
-                                  styles.weekdayButtonText,
-                                  selected && styles.weekdayButtonTextSelected,
-                                ]}
-                              >
-                                {weekday.label}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
+                      <WeekdayButtonGroup
+                        selectedWeekdays={effectiveWeekdays}
+                        onToggleWeekday={toggleWeekday}
+                        disabled={inheritedWeekdays.length > 0}
+                      />
                     </View>
                   )}
                   {dateError && <Text style={styles.errorText}>{dateError}</Text>}
