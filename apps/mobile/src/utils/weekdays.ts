@@ -1,4 +1,5 @@
-const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+// インデックス = JSのDate#getDay()の曜日値（0=日曜）
+export const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export function parseWeekdays(value?: string): number[] {
   if (!value) return [];

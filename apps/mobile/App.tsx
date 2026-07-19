@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
+import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import * as Notifications from "expo-notifications";
 import {
@@ -16,24 +17,41 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import LicensesScreen from "./src/screens/LicensesScreen";
 import type { RootStackParamList, RootTabParamList } from "./src/navigation/types";
 import { DatabaseProvider } from "./src/contexts/DatabaseContext";
-import { BottomTabBar } from "./src/components/BottomTabBar";
+import homeIcon from "./src/assets/tab-icons/home.png";
+import calendarIcon from "./src/assets/tab-icons/calendar.png";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const TabNavigator = () => (
-  <Tab.Navigator
-    id="root-tabs"
-    initialRouteName="Home"
-    tabBar={(props) => <BottomTabBar {...props} />}
-  >
+  <Tab.Navigator id="root-tabs" initialRouteName="Home">
     <Tab.Screen
       name="Home"
       component={HomeScreen}
+      options={{
+        title: "ホーム",
+        tabBarIcon: ({ color, size }) => (
+          <Image
+            source={homeIcon}
+            style={{ width: size, height: size, tintColor: color }}
+            resizeMode="contain"
+          />
+        ),
+      }}
     />
     <Tab.Screen
       name="Calendar"
       component={CalendarScreen}
+      options={{
+        title: "カレンダー",
+        tabBarIcon: ({ color, size }) => (
+          <Image
+            source={calendarIcon}
+            style={{ width: size, height: size, tintColor: color }}
+            resizeMode="contain"
+          />
+        ),
+      }}
     />
   </Tab.Navigator>
 );

@@ -22,6 +22,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Category, SavedItem } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
+import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
@@ -30,16 +31,6 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
   NativeStackScreenProps<RootStackParamList>
 >;
-
-const WEEKDAY_OPTIONS = [
-  { value: 0, label: "日" },
-  { value: 1, label: "月" },
-  { value: 2, label: "火" },
-  { value: 3, label: "水" },
-  { value: 4, label: "木" },
-  { value: 5, label: "金" },
-  { value: 6, label: "土" },
-] as const;
 
 const parseOptionalDate = (value?: string | null): Date | null => {
   if (!value) return null;
@@ -311,29 +302,10 @@ const HomeScreen = ({ navigation }: Props) => {
               returnKeyType="done"
             />
             <Text style={styles.fieldLabel}>曜日</Text>
-            <View style={styles.weekdayRow}>
-              {WEEKDAY_OPTIONS.map((weekday) => {
-                const selected = editCategoryWeekdays.includes(weekday.value);
-
-                return (
-                  <TouchableOpacity
-                    key={weekday.value}
-                    style={[styles.weekdayButton, selected && styles.weekdayButtonSelected]}
-                    onPress={() => toggleEditCategoryWeekday(weekday.value)}
-                    activeOpacity={0.8}
-                  >
-                    <Text
-                      style={[
-                        styles.weekdayButtonText,
-                        selected && styles.weekdayButtonTextSelected,
-                      ]}
-                    >
-                      {weekday.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <WeekdayButtonGroup
+              selectedWeekdays={editCategoryWeekdays}
+              onToggleWeekday={toggleEditCategoryWeekday}
+            />
             <View style={styles.dateRow}>
               <View style={styles.dateColumn}>
                 <Text style={styles.fieldLabel}>開始日</Text>
@@ -736,34 +708,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 6,
-  },
-  weekdayRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginBottom: 14,
-  },
-  weekdayButton: {
-    minWidth: 40,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: "#fff",
-  },
-  weekdayButtonSelected: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
-  },
-  weekdayButtonText: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "600",
-  },
-  weekdayButtonTextSelected: {
-    color: "#fff",
   },
   dateRow: {
     flexDirection: "row",

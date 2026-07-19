@@ -1,14 +1,7 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { WEEKDAY_LABELS } from "../utils/weekdays";
 
-const WEEKDAY_OPTIONS = [
-  { value: 0, label: "日" },
-  { value: 1, label: "月" },
-  { value: 2, label: "火" },
-  { value: 3, label: "水" },
-  { value: 4, label: "木" },
-  { value: 5, label: "金" },
-  { value: 6, label: "土" },
-] as const;
+const WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((label, value) => ({ value, label }));
 
 interface WeekdayButtonGroupProps {
   selectedWeekdays: number[];
@@ -50,7 +43,8 @@ export function WeekdayButtonGroup({
               isLast && styles.buttonLast,
               selected && styles.buttonSelected,
               pressed && !disabled && Platform.OS === "ios" && styles.buttonPressedIOS,
-              disabled && styles.buttonDisabled,
+              // 選択中（引き継ぎ曜日）は無効時もフル彩度のまま強調を維持する
+              disabled && !selected && styles.buttonDisabled,
             ]}
           >
             <Text

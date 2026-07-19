@@ -88,7 +88,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
   const [notificationEnabled, setNotificationEnabled] = useState(true);
   const colorScheme = useColorScheme();
-  const pickerItemColor = colorScheme === "dark" ? "#ffffff" : "#000000";
+  // Androidのピッカーダイアログは端末テーマに従って背景が暗くなるためダーク時のみ白文字。
+  // iOSのホイールは画面（白背景固定）上に直接描画されるので常に濃色でないと見えなくなる。
+  const pickerItemColor =
+    Platform.OS === "android" && colorScheme === "dark" ? "#ffffff" : "#000000";
 
   const inheritedWeekdays = useMemo(() => {
     if (!selectedOption) return [];
