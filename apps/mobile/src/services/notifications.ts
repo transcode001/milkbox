@@ -154,6 +154,33 @@ export function createReminderDate(item: SavedItem): Date | null {
   return new Date(eventMoment.getTime() - getNotificationMinutesBefore(item) * 60 * 1000);
 }
 
+export interface WeeklyTrigger {
+  // expo-notificationsのWEEKLYトリガーに合わせた1(日)〜7(土)
+  weekday: number;
+  hour: number;
+  minute: number;
+}
+
+// 曜日繰り返しタスクの「発生曜日・時刻」から、オフセット分前の通知曜日・時刻を求める。
+// 曜日を確定させるため、その曜日の実在日(2024-01-07=日曜始まり)を基準にオフセットを引く。
+// オフセットが日をまたぐと通知の曜日がずれる(例: 月9:00の1時間前通知は日曜ではなく月曜のまま、
+// 月0:30の1時間前通知は日曜23:30になる)ため、Dateの繰り下げ計算に委ねる。
+export function computeWeeklyTrigger(
+  eventWeekday: number,
+  eventHour: number,
+  eventMinute: number,
+  offsetMinutes: number,
+): WeeklyTrigger {
+  const eventInstant = new Date(2024, 0, 7 + eventWeekday, eventHour, eventMinute, 0, 0);
+  const notifyInstant = new Date(eventInstant.getTime() - offsetMinutes * 60 * 1000);
+
+  return {
+    weekday: notifyInstant.getDay() + 1,
+    hour: notifyInstant.getHours(),
+    minute: notifyInstant.getMinutes(),
+  };
+}
+
 export function shouldScheduleNotification(item: SavedItem): boolean {
   if (!item.notificationEnabled) return false;
 
@@ -199,23 +226,19 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
       const eventMinute = startHasTime
         ? new Date(item.startDate!).getMinutes()
         : 0;
-      const offsetMs = getNotificationMinutesBefore(item) * 60 * 1000;
+      const offsetMinutes = getNotificationMinutesBefore(item);
 
       try {
         for (const weekday of weekdays) {
-          // 曜日を確定させるため、その曜日の実在日(2024-01-07=日曜始まり)を基準にオフセットを引く。
-          // オフセットが日をまたぐと通知の曜日がずれる(例: 月9:00の1時間前通知は日曜ではなく月曜のまま、
-          // 月0:30の1時間前通知は日曜23:30になる)ため、Dateの繰り下げ計算に委ねる。
-          const eventInstant = new Date(2024, 0, 7 + weekday, eventHour, eventMinute, 0, 0);
-          const notifyInstant = new Date(eventInstant.getTime() - offsetMs);
+          const trigger = computeWeeklyTrigger(weekday, eventHour, eventMinute, offsetMinutes);
 
           const identifier = await Notifications.scheduleNotificationAsync({
             content,
             trigger: {
               type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-              weekday: notifyInstant.getDay() + 1,
-              hour: notifyInstant.getHours(),
-              minute: notifyInstant.getMinutes(),
+              weekday: trigger.weekday,
+              hour: trigger.hour,
+              minute: trigger.minute,
               channelId: TASK_REMINDERS_CHANNEL_ID,
             },
           });

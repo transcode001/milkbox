@@ -55,14 +55,18 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
       try {
         setTogglingNotificationItemId(id);
         const item = items.flatMap((section) => section.data).find((candidate) => candidate.id === id);
-        const shouldRestoreDefaultReminder =
-          enabled && item?.notificationMinutesBefore === NONE_REMINDER_VALUE;
+        // notificationEnabledとnotificationMinutesBeforeの番兵値(なし)を常に対で保つ。
+        // オフにする時は番兵値へ、なし状態からオンに戻す時はデフォルトへ復元する。
+        let notificationMinutesBefore: number | undefined;
+        if (!enabled) {
+          notificationMinutesBefore = NONE_REMINDER_VALUE;
+        } else if (item?.notificationMinutesBefore === NONE_REMINDER_VALUE) {
+          notificationMinutesBefore = DEFAULT_REMINDER_MINUTES;
+        }
 
         await dbManager.updateItem(id, {
           notificationEnabled: enabled,
-          ...(shouldRestoreDefaultReminder
-            ? { notificationMinutesBefore: DEFAULT_REMINDER_MINUTES }
-            : {}),
+          ...(notificationMinutesBefore !== undefined ? { notificationMinutesBefore } : {}),
         });
         await loadItems();
       } catch {

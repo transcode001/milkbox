@@ -24,9 +24,3 @@ export const REMINDER_OPTIONS: readonly ReminderOption[] = [
 
 // Google Calendarのデフォルト値(30分前)に合わせる
 export const DEFAULT_REMINDER_MINUTES = 30;
-
-export function formatReminderLabel(minutes: number): string {
-  const match = REMINDER_OPTIONS.find((option) => option.minutes === minutes);
-  if (match) return match.label;
-  return minutes % 1440 === 0 ? `${minutes / 1440}日前` : `${minutes}分前`;
-}

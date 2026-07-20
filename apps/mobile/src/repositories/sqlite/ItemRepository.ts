@@ -32,7 +32,7 @@ export class SQLiteItemRepository implements IItemRepository {
         endDate TEXT,
         weekdays TEXT,
         notificationEnabled INTEGER NOT NULL DEFAULT 1,
-        notificationMinutesBefore INTEGER NOT NULL DEFAULT ${DEFAULT_REMINDER_MINUTES},
+        notificationMinutesBefore INTEGER NOT NULL DEFAULT 30,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -61,8 +61,10 @@ export class SQLiteItemRepository implements IItemRepository {
     }
 
     if (!notificationMinutesBeforeColumn) {
+      // DBのデフォルト値はDEFAULT_REMINDER_MINUTES(30)とリテラルで一致させている。
+      // notificationEnabledカラム定義と同様、DDLへの定数埋め込みは行わない。
       await this.db.execAsync(
-        `ALTER TABLE items ADD COLUMN notificationMinutesBefore INTEGER NOT NULL DEFAULT ${DEFAULT_REMINDER_MINUTES};`
+        'ALTER TABLE items ADD COLUMN notificationMinutesBefore INTEGER NOT NULL DEFAULT 30;'
       );
     }
 
@@ -131,7 +133,7 @@ export class SQLiteItemRepository implements IItemRepository {
           endDate TEXT,
           weekdays TEXT,
           notificationEnabled INTEGER NOT NULL DEFAULT 1,
-          notificationMinutesBefore INTEGER NOT NULL DEFAULT ${DEFAULT_REMINDER_MINUTES},
+          notificationMinutesBefore INTEGER NOT NULL DEFAULT 30,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
       `);

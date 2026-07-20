@@ -90,7 +90,7 @@ function formatMonthLabel(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月`;
 }
 
-function formatTimeOfDay(value?: string): string | null {
+export function formatTimeOfDay(value?: string): string | null {
   if (!value || !value.includes("T")) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return null;
@@ -101,7 +101,7 @@ function formatTimeOfDay(value?: string): string | null {
   });
 }
 
-function formatScheduleTime(item: SavedItem): string {
+export function formatScheduleTime(item: SavedItem): string {
   const start = formatTimeOfDay(item.startDate);
   const end = formatTimeOfDay(item.endDate);
   if (start && end) return `${start} 〜 ${end}`;
