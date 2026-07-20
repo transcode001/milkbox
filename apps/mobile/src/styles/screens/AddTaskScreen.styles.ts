@@ -192,6 +192,16 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: "#333",
   },
+  reminderContainer: {
+    marginBottom: 8,
+  },
+  reminderPicker: {
+    height: 120,
+  },
+  reminderPickerItem: {
+    height: 120,
+    fontSize: 16,
+  },
   selectedText: {
     padding: 10,
     fontSize: 14,

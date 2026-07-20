@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { DEFAULT_REMINDER_MINUTES, NONE_REMINDER_VALUE, REMINDER_OPTIONS } from "@milkbox/shared";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import type { RootStackParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
@@ -86,7 +87,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [selectedWeekdays, setSelectedWeekdays] = useState<number[]>([]);
-  const [notificationEnabled, setNotificationEnabled] = useState(true);
+  const [notificationMinutesBefore, setNotificationMinutesBefore] = useState(DEFAULT_REMINDER_MINUTES);
   const colorScheme = useColorScheme();
   // Androidのピッカーダイアログは端末テーマに従って背景が暗くなるためダーク時のみ白文字。
   // iOSのホイールは画面（白背景固定）上に直接描画されるので常に濃色でないと見えなくなる。
@@ -149,6 +150,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     }
 
     const fallbackDate = startDate ?? endDate ?? new Date();
+    const notificationEnabled = notificationMinutesBefore !== NONE_REMINDER_VALUE;
 
     try {
       await dbManager.createItem({
@@ -159,13 +161,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
         weekdays: noCategoryChecked ? undefined : JSON.stringify(effectiveWeekdays),
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled,
+        notificationMinutesBefore,
       });
 
       setText("");
       setStartDate(null);
       setEndDate(null);
       setSelectedWeekdays([]);
-      setNotificationEnabled(true);
+      setNotificationMinutesBefore(DEFAULT_REMINDER_MINUTES);
       setActiveDatePicker(null);
       await loadItems();
       setShowPostSubmitModal(true);
@@ -495,16 +498,24 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     </View>
                   )}
                   {dateError && <Text style={styles.errorText}>{dateError}</Text>}
-                  <TouchableOpacity
-                    style={styles.checkboxRow}
-                    onPress={() => setNotificationEnabled((prev) => !prev)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.checkbox, notificationEnabled && styles.checkboxChecked]}>
-                      {notificationEnabled ? <Text style={styles.checkboxMark}>✓</Text> : null}
-                    </View>
-                    <Text style={styles.checkboxLabel}>通知</Text>
-                  </TouchableOpacity>
+                  <View style={styles.reminderContainer}>
+                    <Text style={styles.dateLabel}>通知タイミング</Text>
+                    <Picker
+                      selectedValue={notificationMinutesBefore}
+                      onValueChange={(value) => setNotificationMinutesBefore(Number(value))}
+                      style={styles.reminderPicker}
+                      itemStyle={styles.reminderPickerItem}
+                    >
+                      {REMINDER_OPTIONS.map((option) => (
+                        <Picker.Item
+                          key={option.minutes}
+                          label={option.label}
+                          value={option.minutes}
+                          color={pickerItemColor}
+                        />
+                      ))}
+                    </Picker>
+                  </View>
                   <TouchableOpacity
                     style={styles.submitButton}
                     onPress={() => {
