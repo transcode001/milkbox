@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import type { SavedItem } from "@milkbox/shared";
+import { DEFAULT_REMINDER_MINUTES, type SavedItem } from "@milkbox/shared";
 import { parseWeekdays } from "../utils/weekdays";
 
 const NOTIFICATION_IDS_STORAGE_KEY = "@milkbox_notification_ids";
@@ -106,7 +106,8 @@ export async function cancelAllTaskNotificationsAsync(): Promise<void> {
   }
 }
 
-export function createReminderDate(item: SavedItem): Date | null {
+// item.startDate/endDateが指す「タスク本来の発生時刻」(通知タイミングのオフセット適用前)
+function createEventMomentDate(item: SavedItem): Date | null {
   if (item.startDate) {
     const startDate = new Date(item.startDate);
     if (Number.isNaN(startDate.getTime())) return null;
@@ -136,6 +137,48 @@ export function createReminderDate(item: SavedItem): Date | null {
   }
 
   return null;
+}
+
+function getNotificationMinutesBefore(item: SavedItem): number {
+  // notificationEnabled=falseの場合、DB上のnotificationMinutesBeforeは「なし」の番兵値(-1)を
+  // 保持していることがある。呼び出し元は必ずnotificationEnabledで先にガードするが、
+  // 万一そのまま計算に使われても負のオフセットにならないよう下限を0で丸める。
+  return Math.max(0, item.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES);
+}
+
+// 発生時刻からnotificationMinutesBefore分前にずらした、実際に通知を鳴らす時刻
+export function createReminderDate(item: SavedItem): Date | null {
+  const eventMoment = createEventMomentDate(item);
+  if (!eventMoment) return null;
+
+  return new Date(eventMoment.getTime() - getNotificationMinutesBefore(item) * 60 * 1000);
+}
+
+export interface WeeklyTrigger {
+  // expo-notificationsのWEEKLYトリガーに合わせた1(日)〜7(土)
+  weekday: number;
+  hour: number;
+  minute: number;
+}
+
+// 曜日繰り返しタスクの「発生曜日・時刻」から、オフセット分前の通知曜日・時刻を求める。
+// 曜日を確定させるため、その曜日の実在日(2024-01-07=日曜始まり)を基準にオフセットを引く。
+// オフセットが日をまたぐと通知の曜日がずれる(例: 月9:00の1時間前通知は日曜ではなく月曜のまま、
+// 月0:30の1時間前通知は日曜23:30になる)ため、Dateの繰り下げ計算に委ねる。
+export function computeWeeklyTrigger(
+  eventWeekday: number,
+  eventHour: number,
+  eventMinute: number,
+  offsetMinutes: number,
+): WeeklyTrigger {
+  const eventInstant = new Date(2024, 0, 7 + eventWeekday, eventHour, eventMinute, 0, 0);
+  const notifyInstant = new Date(eventInstant.getTime() - offsetMinutes * 60 * 1000);
+
+  return {
+    weekday: notifyInstant.getDay() + 1,
+    hour: notifyInstant.getHours(),
+    minute: notifyInstant.getMinutes(),
+  };
 }
 
 export function shouldScheduleNotification(item: SavedItem): boolean {
@@ -177,22 +220,25 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
 
     if (weekdays.length > 0) {
       const startHasTime = item.startDate?.includes("T") || item.startDate?.includes(" ");
-      const notifyHour = startHasTime
+      const eventHour = startHasTime
         ? new Date(item.startDate!).getHours()
         : REMINDER_HOUR;
-      const notifyMinute = startHasTime
+      const eventMinute = startHasTime
         ? new Date(item.startDate!).getMinutes()
         : 0;
+      const offsetMinutes = getNotificationMinutesBefore(item);
 
       try {
         for (const weekday of weekdays) {
+          const trigger = computeWeeklyTrigger(weekday, eventHour, eventMinute, offsetMinutes);
+
           const identifier = await Notifications.scheduleNotificationAsync({
             content,
             trigger: {
               type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-              weekday: weekday + 1,
-              hour: notifyHour,
-              minute: notifyMinute,
+              weekday: trigger.weekday,
+              hour: trigger.hour,
+              minute: trigger.minute,
               channelId: TASK_REMINDERS_CHANNEL_ID,
             },
           });

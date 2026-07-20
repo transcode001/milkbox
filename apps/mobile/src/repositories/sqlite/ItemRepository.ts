@@ -1,9 +1,10 @@
 // apps/mobile/src/repositories/sqlite/ItemRepository.ts
 import * as SQLite from 'expo-sqlite';
-import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_REMINDER_MINUTES, IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 
-type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled'> & {
+type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
   notificationEnabled?: boolean | number;
+  notificationMinutesBefore?: number | null;
 };
 
 export class SQLiteItemRepository implements IItemRepository {
@@ -31,6 +32,7 @@ export class SQLiteItemRepository implements IItemRepository {
         endDate TEXT,
         weekdays TEXT,
         notificationEnabled INTEGER NOT NULL DEFAULT 1,
+        notificationMinutesBefore INTEGER NOT NULL DEFAULT 30,
         FOREIGN KEY (categoryId) REFERENCES categories(id)
       );
     `);
@@ -44,6 +46,9 @@ export class SQLiteItemRepository implements IItemRepository {
     const categoryIdColumn = tableInfo.find((column) => column.name === 'categoryId');
     const weekdaysColumn = tableInfo.find((column) => column.name === 'weekdays');
     const notificationEnabledColumn = tableInfo.find((column) => column.name === 'notificationEnabled');
+    const notificationMinutesBeforeColumn = tableInfo.find(
+      (column) => column.name === 'notificationMinutesBefore'
+    );
 
     if (!weekdaysColumn) {
       await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
@@ -52,6 +57,14 @@ export class SQLiteItemRepository implements IItemRepository {
     if (!notificationEnabledColumn) {
       await this.db.execAsync(
         'ALTER TABLE items ADD COLUMN notificationEnabled INTEGER NOT NULL DEFAULT 1;'
+      );
+    }
+
+    if (!notificationMinutesBeforeColumn) {
+      // DBのデフォルト値はDEFAULT_REMINDER_MINUTES(30)とリテラルで一致させている。
+      // notificationEnabledカラム定義と同様、DDLへの定数埋め込みは行わない。
+      await this.db.execAsync(
+        'ALTER TABLE items ADD COLUMN notificationMinutesBefore INTEGER NOT NULL DEFAULT 30;'
       );
     }
 
@@ -120,12 +133,13 @@ export class SQLiteItemRepository implements IItemRepository {
           endDate TEXT,
           weekdays TEXT,
           notificationEnabled INTEGER NOT NULL DEFAULT 1,
+          notificationMinutesBefore INTEGER NOT NULL DEFAULT 30,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
       `);
       await this.db.execAsync(`
-        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled)
-        SELECT id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled FROM items;
+        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled, notificationMinutesBefore)
+        SELECT id, categoryId, text, date, startDate, endDate, weekdays, notificationEnabled, notificationMinutesBefore FROM items;
       `);
       await this.db.execAsync('DROP TABLE IF EXISTS items;');
       await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
@@ -137,6 +151,7 @@ export class SQLiteItemRepository implements IItemRepository {
       ...row,
       notificationEnabled:
         row.notificationEnabled !== false && row.notificationEnabled !== 0,
+      notificationMinutesBefore: row.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
     };
   }
 
@@ -166,6 +181,7 @@ export class SQLiteItemRepository implements IItemRepository {
         items.endDate,
         items.weekdays,
         items.notificationEnabled,
+        items.notificationMinutesBefore,
         categories.name as categoryName
       FROM items
       LEFT JOIN categories ON items.categoryId = categories.id
@@ -186,8 +202,9 @@ export class SQLiteItemRepository implements IItemRepository {
   async create(data: CreateItemDto): Promise<SavedItem> {
     if (!this.db) throw new Error('Database not initialized');
     const notificationEnabled = data.notificationEnabled !== false;
+    const notificationMinutesBefore = data.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES;
     const result = await this.db.runAsync(
-      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays, notificationEnabled) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays, notificationEnabled, notificationMinutesBefore) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       [
         data.categoryId ?? null,
         data.text,
@@ -196,6 +213,7 @@ export class SQLiteItemRepository implements IItemRepository {
         data.endDate ?? null,
         data.weekdays ?? null,
         notificationEnabled ? 1 : 0,
+        notificationMinutesBefore,
       ]
     );
     return {
@@ -207,6 +225,7 @@ export class SQLiteItemRepository implements IItemRepository {
       endDate: data.endDate,
       weekdays: data.weekdays,
       notificationEnabled,
+      notificationMinutesBefore,
     };
   }
 
@@ -222,6 +241,10 @@ export class SQLiteItemRepository implements IItemRepository {
     if (data.notificationEnabled !== undefined) {
       updates.push('notificationEnabled = ?');
       params.push(data.notificationEnabled ? 1 : 0);
+    }
+    if (data.notificationMinutesBefore !== undefined) {
+      updates.push('notificationMinutesBefore = ?');
+      params.push(data.notificationMinutesBefore);
     }
     if (data.startDate !== undefined) {
       updates.push('startDate = ?');

@@ -1,8 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_REMINDER_MINUTES, IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 
-type StoredItem = Omit<SavedItem, 'notificationEnabled'> & {
+type StoredItem = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
   notificationEnabled?: boolean | number;
+  notificationMinutesBefore?: number;
 };
 
 export class AsyncStorageItemRepository implements IItemRepository {
@@ -19,6 +20,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       ...item,
       notificationEnabled:
         item.notificationEnabled !== false && item.notificationEnabled !== 0,
+      notificationMinutesBefore: item.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
     }));
   }
 
@@ -38,6 +40,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       endDate: data.endDate,
       weekdays: data.weekdays,
       notificationEnabled: data.notificationEnabled !== false,
+      notificationMinutesBefore: data.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
     };
     items.unshift(newItem);
     await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
@@ -53,6 +56,9 @@ export class AsyncStorageItemRepository implements IItemRepository {
       }
       if (data.notificationEnabled !== undefined) {
         items[index].notificationEnabled = data.notificationEnabled;
+      }
+      if (data.notificationMinutesBefore !== undefined) {
+        items[index].notificationMinutesBefore = data.notificationMinutesBefore;
       }
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     }

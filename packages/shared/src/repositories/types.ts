@@ -16,6 +16,8 @@ export interface SavedItem {
   weekdays?: string;
   categoryName?: string;
   notificationEnabled: boolean;
+  // 開始日時の何分前に通知するか(Google Calendarの選択肢に準拠、既定30分)
+  notificationMinutesBefore: number;
 }
 
 export interface CreateItemDto {
@@ -26,11 +28,13 @@ export interface CreateItemDto {
   endDate?: string;
   weekdays?: string;
   notificationEnabled?: boolean;
+  notificationMinutesBefore?: number;
 }
 
 export interface UpdateItemDto {
   text?: string;
   notificationEnabled?: boolean;
+  notificationMinutesBefore?: number;
   startDate?: string | null;
   endDate?: string | null;
   weekdays?: string | null;

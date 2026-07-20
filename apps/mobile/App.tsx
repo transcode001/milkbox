@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+import { Image } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { Ionicons } from "@expo/vector-icons";
 import * as Notifications from "expo-notifications";
 import {
   NavigationContainer,
@@ -17,6 +17,8 @@ import SettingsScreen from "./src/screens/SettingsScreen";
 import LicensesScreen from "./src/screens/LicensesScreen";
 import type { RootStackParamList, RootTabParamList } from "./src/navigation/types";
 import { DatabaseProvider } from "./src/contexts/DatabaseContext";
+import homeIcon from "./src/assets/tab-icons/home.png";
+import calendarIcon from "./src/assets/tab-icons/calendar.png";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -27,8 +29,13 @@ const TabNavigator = () => (
       name="Home"
       component={HomeScreen}
       options={{
+        title: "ホーム",
         tabBarIcon: ({ color, size }) => (
-          <Ionicons name="home-outline" size={size} color={color} />
+          <Image
+            source={homeIcon}
+            style={{ width: size, height: size, tintColor: color }}
+            resizeMode="contain"
+          />
         ),
       }}
     />
@@ -36,11 +43,12 @@ const TabNavigator = () => (
       name="Calendar"
       component={CalendarScreen}
       options={{
+        title: "カレンダー",
         tabBarIcon: ({ color, size }) => (
-          <Ionicons
-            name="calendar-outline"
-            size={size}
-            color={color}
+          <Image
+            source={calendarIcon}
+            style={{ width: size, height: size, tintColor: color }}
+            resizeMode="contain"
           />
         ),
       }}

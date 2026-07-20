@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from "react";
 import { Alert } from "react-native";
+import { DEFAULT_REMINDER_MINUTES, NONE_REMINDER_VALUE } from "@milkbox/shared";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
 import type { CategorySection } from "../utils/groupByCategory";
 import { groupByCategory } from "../utils/groupByCategory";
@@ -53,7 +54,20 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
 
       try {
         setTogglingNotificationItemId(id);
-        await dbManager.updateItem(id, { notificationEnabled: enabled });
+        const item = items.flatMap((section) => section.data).find((candidate) => candidate.id === id);
+        // notificationEnabledとnotificationMinutesBeforeの番兵値(なし)を常に対で保つ。
+        // オフにする時は番兵値へ、なし状態からオンに戻す時はデフォルトへ復元する。
+        let notificationMinutesBefore: number | undefined;
+        if (!enabled) {
+          notificationMinutesBefore = NONE_REMINDER_VALUE;
+        } else if (item?.notificationMinutesBefore === NONE_REMINDER_VALUE) {
+          notificationMinutesBefore = DEFAULT_REMINDER_MINUTES;
+        }
+
+        await dbManager.updateItem(id, {
+          notificationEnabled: enabled,
+          ...(notificationMinutesBefore !== undefined ? { notificationMinutesBefore } : {}),
+        });
         await loadItems();
       } catch {
         Alert.alert("Error", "通知設定の更新に失敗しました");
@@ -62,7 +76,7 @@ export const useItemForm = ({ dbManager }: UseItemFormParams): UseItemFormResult
         setTogglingNotificationItemId(null);
       }
     },
-    [dbManager, loadItems],
+    [dbManager, items, loadItems],
   );
 
   return {
