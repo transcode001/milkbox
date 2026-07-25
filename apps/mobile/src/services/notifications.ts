@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { DEFAULT_REMINDER_MINUTES, type SavedItem } from "@milkbox/shared";
 import { parseWeekdays } from "../utils/weekdays";
+import { colors } from "../styles/tokens";
 
 const NOTIFICATION_IDS_STORAGE_KEY = "@milkbox_notification_ids";
 const TASK_REMINDERS_CHANNEL_ID = "task-reminders";
@@ -46,7 +47,7 @@ async function ensureNotificationPermission(): Promise<boolean> {
       description: "登録したタスクの開始日や曜日をお知らせします",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#007AFF",
+      lightColor: colors.primary,
       sound: "default",
     });
   }

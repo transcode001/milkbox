@@ -6,6 +6,8 @@ import { Picker } from '@react-native-picker/picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { DEFAULT_REMINDER_MINUTES, NONE_REMINDER_VALUE, REMINDER_OPTIONS } from "@milkbox/shared";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
+import { modalStyles } from "../styles/modalStyles";
+import { colors } from "../styles/tokens";
 import type { RootStackParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { DeleteCategoryMode, useCategory } from "../hooks/useCategory";
@@ -92,7 +94,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
   // Androidのピッカーダイアログは端末テーマに従って背景が暗くなるためダーク時のみ白文字。
   // iOSのホイールは画面（白背景固定）上に直接描画されるので常に濃色でないと見えなくなる。
   const pickerItemColor =
-    Platform.OS === "android" && colorScheme === "dark" ? "#ffffff" : "#000000";
+    Platform.OS === "android" && colorScheme === "dark" ? colors.onPrimary : colors.textPrimary;
 
   const inheritedWeekdays = useMemo(() => {
     if (!selectedOption) return [];
@@ -208,7 +210,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 onPress={() => setShowPostSubmitModal(false)}
                 style={[styles.modalButton, styles.modalButtonCancel]}
               >
-                <Text style={styles.modalButtonText}>続けて登録する</Text>
+                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
+                  続けて登録する
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => {
@@ -253,7 +257,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setShowDeleteCategoryModal(false)}
               >
-                <Text style={styles.modalButtonText}>キャンセル</Text>
+                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
+                  キャンセル
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -287,7 +293,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   setShowAddCategoryModal(false);
                 }}
               >
-                <Text style={styles.modalButtonText}>キャンセル</Text>
+                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
+                  キャンセル
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonSubmit]}
@@ -392,7 +400,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     style={styles.textarea}
                     value={text}
                     onChangeText={setText}
-                    placeholder="Enter text here"
+                    placeholder="テキストを入力"
                     multiline
                     returnKeyType="done"
                     blurOnSubmit={true}
@@ -522,13 +530,13 @@ const AddTaskScreen = ({ navigation }: Props) => {
                       void handleSubmit();
                     }}
                   >
-                    <Text style={styles.buttonText}>Submit</Text>
+                    <Text style={styles.buttonText}>送信</Text>
                   </TouchableOpacity>
                 </View>
 
                 <View style={styles.listContainer}>
                   <Text style={styles.listTitle}>
-                    Saved Tasks ({items.reduce((sum, section) => sum + section.data.length, 0)}):
+                    保存済みタスク ({items.reduce((sum, section) => sum + section.data.length, 0)}):
                   </Text>
                 </View>
               </>
@@ -563,7 +571,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   style={styles.deleteButton}
                   onPress={() => deleteItem(item.id)}
                 >
-                  <Text style={styles.deleteButtonText}>Delete</Text>
+                  <Text style={styles.deleteButtonText}>削除</Text>
                 </TouchableOpacity>
               </View>
             )}

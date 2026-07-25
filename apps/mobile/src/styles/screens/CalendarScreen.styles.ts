@@ -1,12 +1,13 @@
 import { StyleSheet } from "react-native";
+import { colors, radii, spacing } from "../tokens";
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f7f8fc",
+    backgroundColor: colors.groupedBackground,
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: spacing.lg,
     paddingTop: 8,
     paddingBottom: 32,
   },
@@ -19,21 +20,21 @@ export const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#1f2937",
+    color: colors.textPrimary,
   },
   monthButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
-    backgroundColor: "#ffffff",
-    borderRadius: 10,
+    backgroundColor: colors.background,
+    borderRadius: radii.md,
   },
   monthButtonText: {
-    color: "#2563eb",
+    color: colors.primary,
     fontSize: 14,
     fontWeight: "600",
   },
   calendarBody: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.background,
     borderRadius: 16,
     paddingVertical: 8,
     paddingHorizontal: 4,
@@ -69,7 +70,7 @@ export const styles = StyleSheet.create({
   dayNumber: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1f2937",
+    color: colors.textPrimary,
     width: 28,
     height: 28,
     textAlign: "center",
@@ -77,15 +78,15 @@ export const styles = StyleSheet.create({
     borderRadius: 14,
   },
   dayNumberMuted: {
-    color: "#9ca3af",
+    color: colors.textSecondary,
   },
   dayNumberSelected: {
-    backgroundColor: "#2563eb",
-    color: "#ffffff",
+    backgroundColor: colors.primary,
+    color: colors.onPrimary,
   },
   dayNumberToday: {
     backgroundColor: "#dbeafe",
-    color: "#2563eb",
+    color: colors.primary,
   },
   dayMeta: {
     marginTop: 8,
@@ -95,7 +96,7 @@ export const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 999,
-    backgroundColor: "#9ca3af",
+    backgroundColor: colors.textSecondary,
     marginHorizontal: 1,
   },
   eventDotRow: {
@@ -103,15 +104,15 @@ export const styles = StyleSheet.create({
     marginTop: 3,
   },
   eventDotSelected: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.background,
   },
   eventCount: {
     fontSize: 11,
-    color: "#2563eb",
+    color: colors.primary,
     fontWeight: "600",
   },
   eventCountSelected: {
-    color: "#ffffff",
+    color: colors.onPrimary,
   },
   scheduleHeader: {
     marginTop: 20,
@@ -123,30 +124,30 @@ export const styles = StyleSheet.create({
   scheduleTitle: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#111827",
+    color: colors.textPrimary,
   },
   todayButton: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: 10,
+    borderRadius: radii.md,
     backgroundColor: "#e5edff",
   },
   todayButtonText: {
-    color: "#1d4ed8",
+    color: colors.primary,
     fontWeight: "600",
   },
   scheduleList: {
     paddingBottom: 8,
   },
   emptyState: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.background,
     borderRadius: 16,
     padding: 20,
   },
   emptyTitle: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   emptyText: {
@@ -155,7 +156,7 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
   },
   scheduleCard: {
-    backgroundColor: "#ffffff",
+    backgroundColor: colors.background,
     borderRadius: 16,
     paddingVertical: 14,
     paddingLeft: 20,
@@ -181,7 +182,7 @@ export const styles = StyleSheet.create({
   scheduleTime: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#2563eb",
+    color: colors.primary,
   },
   categoryBadge: {
     paddingHorizontal: 10,
@@ -196,7 +197,7 @@ export const styles = StyleSheet.create({
   },
   scheduleText: {
     fontSize: 15,
-    color: "#111827",
+    color: colors.textPrimary,
     lineHeight: 22,
   },
 });

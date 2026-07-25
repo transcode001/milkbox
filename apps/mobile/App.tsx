@@ -19,12 +19,20 @@ import type { RootStackParamList, RootTabParamList } from "./src/navigation/type
 import { DatabaseProvider } from "./src/contexts/DatabaseContext";
 import homeIcon from "./src/assets/tab-icons/home.png";
 import calendarIcon from "./src/assets/tab-icons/calendar.png";
+import { colors } from "./src/styles/tokens";
 
 const Tab = createBottomTabNavigator<RootTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const TabNavigator = () => (
-  <Tab.Navigator id="root-tabs" initialRouteName="Home">
+  <Tab.Navigator
+    id="root-tabs"
+    initialRouteName="Home"
+    screenOptions={{
+      tabBarActiveTintColor: colors.primary,
+      tabBarInactiveTintColor: colors.tabInactive,
+    }}
+  >
     <Tab.Screen
       name="Home"
       component={HomeScreen}

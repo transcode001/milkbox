@@ -8,6 +8,7 @@ import {
   CHEVRON_SIZE,
   settingsListStyles,
 } from "../styles/settingsList.styles";
+import { colors, spacing } from "../styles/tokens";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
@@ -37,11 +38,11 @@ const SettingsScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5f5f5",
+    backgroundColor: colors.groupedBackground,
   },
   section: {
-    marginTop: 16,
-    backgroundColor: "#fff",
+    marginTop: spacing.lg,
+    backgroundColor: colors.background,
     borderTopWidth: 1,
     borderTopColor: "#eee",
   },
