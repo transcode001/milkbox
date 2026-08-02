@@ -6,7 +6,7 @@
     "android-apk": {
       "distribution": "internal",
       "cache": {
-      "disabled": true
+        "disabled": true
       },
       "android": {
         "buildType": "apk"

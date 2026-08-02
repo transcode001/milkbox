@@ -29,9 +29,12 @@ apps/mobile/.expo/
 # Build Outputs
 .next/
 out/
-build
+**/build/
 dist
 
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
 
 # Debug
 npm-debug.log*
