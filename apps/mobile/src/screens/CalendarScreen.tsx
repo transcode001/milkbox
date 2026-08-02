@@ -14,7 +14,13 @@ import { SavedItem } from "@milkbox/shared/repositories/types";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
+import { colors } from "../styles/tokens";
 
+// 各エントリはbg(塗り)/border(縁取り)/light(バッジ背景)/lightText(バッジ文字)の
+// 4色が意図的に異なるコントラスト・区別のために設計されている。
+// トークン統一のためcolors.primaryへ一本化すると縁取りが塗りと同色になり見えなくなる、
+// バッジ文字のコントラストが下がるなどの見た目のリグレッションが起きるため、
+// このパレットはトークン化せず既存の専用配色のままにする。
 const BAR_PALETTE = [
   { bg: "#3B82F6", border: "#2563EB", light: "#DBEAFE", lightText: "#1D4ED8" },
   { bg: "#10B981", border: "#059669", light: "#D1FAE5", lightText: "#065F46" },
@@ -633,7 +639,7 @@ const localStyles = StyleSheet.create({
   },
   rangeDateText: {
     fontSize: 11,
-    color: "#999",
+    color: colors.textSecondary,
     marginTop: 4,
   },
 });

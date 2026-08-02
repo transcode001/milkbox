@@ -1,5 +1,6 @@
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { WEEKDAY_LABELS } from "../utils/weekdays";
+import { colors } from "../styles/tokens";
 
 const WEEKDAY_OPTIONS = WEEKDAY_LABELS.map((label, value) => ({ value, label }));
 
@@ -30,7 +31,9 @@ export function WeekdayButtonGroup({
               disabled
                 ? undefined
                 : {
-                    color: selected ? "rgba(255,255,255,0.25)" : "rgba(0,122,255,0.14)",
+                    // colors.primaryの16進数に透過度(約14%)のhexサフィックスを付与し、
+                    // Android/iOSどちらでもbuttonSelectedの背景色と同系色のrippleにする。
+                    color: selected ? "rgba(255,255,255,0.25)" : `${colors.primary}24`,
                     borderless: false,
                   }
             }
@@ -76,13 +79,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#ccc",
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
     overflow: "hidden",
   },
   buttonJoined: {
     marginLeft: -1,
   },
   buttonFirst: {
+    // radii.mdはAndroidで20になり、44pt高の連結ボタン端が半円状のピル型になってしまうため、
+    // segmented controlの控えめな角丸として固定値を使う。
     borderTopLeftRadius: 8,
     borderBottomLeftRadius: 8,
   },
@@ -91,8 +96,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 8,
   },
   buttonSelected: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
     zIndex: 1,
   },
   buttonPressedIOS: {
@@ -107,9 +112,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   buttonTextSelected: {
-    color: "#fff",
+    color: colors.onPrimary,
   },
   buttonTextDisabled: {
-    color: "#666",
+    color: colors.textSecondary,
   },
 });

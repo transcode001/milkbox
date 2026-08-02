@@ -13,6 +13,8 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { colors, radii, spacing } from "../styles/tokens";
+import { modalStyles } from "../styles/modalStyles";
 import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import Swipeable from "react-native-gesture-handler/Swipeable";
@@ -358,7 +360,9 @@ const HomeScreen = ({ navigation }: Props) => {
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setEditingCategory(null)}
               >
-                <Text style={styles.modalButtonText}>キャンセル</Text>
+                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
+                  キャンセル
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonSubmit]}
@@ -446,7 +450,9 @@ const HomeScreen = ({ navigation }: Props) => {
                 style={[styles.modalButton, styles.modalButtonCancel]}
                 onPress={() => setEditingItem(null)}
               >
-                <Text style={styles.modalButtonText}>キャンセル</Text>
+                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
+                  キャンセル
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonSubmit]}
@@ -558,13 +564,13 @@ const HomeScreen = ({ navigation }: Props) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
+    paddingHorizontal: spacing.xl,
     paddingTop: 12,
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -596,13 +602,13 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   addTaskButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
   },
   addTaskButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontWeight: "600",
     fontSize: 14,
   },
@@ -629,7 +635,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   itemContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
     paddingVertical: 8,
     paddingHorizontal: 4,
     borderBottomWidth: 1,
@@ -663,14 +669,14 @@ const styles = StyleSheet.create({
   deleteAction: {
     width: 84,
     height: "100%",
-    backgroundColor: "#D11A2A",
+    backgroundColor: colors.destructive,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginVertical: 4,
   },
   deleteActionText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontWeight: "700",
     fontSize: 13,
   },
@@ -684,8 +690,8 @@ const styles = StyleSheet.create({
   modalContent: {
     width: "100%",
     maxWidth: 420,
-    backgroundColor: "#fff",
-    borderRadius: 8,
+    backgroundColor: colors.background,
+    borderRadius: radii.modal,
     padding: 20,
   },
   modalTitle: {
@@ -696,7 +702,7 @@ const styles = StyleSheet.create({
   modalInput: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: 12,
     fontSize: 16,
     marginBottom: 14,
@@ -720,10 +726,10 @@ const styles = StyleSheet.create({
   dateSelectorButton: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   dateSelectorButtonText: {
     fontSize: 14,
@@ -738,14 +744,14 @@ const styles = StyleSheet.create({
   },
   datePickerCloseButton: {
     alignSelf: "flex-end",
-    backgroundColor: "#007AFF",
-    borderRadius: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
     paddingVertical: 6,
     paddingHorizontal: 10,
     marginTop: 8,
   },
   datePickerCloseButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -757,17 +763,17 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: "center",
   },
   modalButtonCancel: {
-    backgroundColor: "#ccc",
+    backgroundColor: colors.cancelBackground,
   },
   modalButtonSubmit: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
   },
   modalButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: "600",
   },

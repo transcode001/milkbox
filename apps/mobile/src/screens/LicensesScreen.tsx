@@ -8,6 +8,7 @@ import {
   CHEVRON_SIZE,
   settingsListStyles,
 } from "../styles/settingsList.styles";
+import { colors } from "../styles/tokens";
 
 // 同名パッケージが複数バージョン含まれるため name 単体はキーにできない
 const entryKey = (item: LicenseEntry) => `${item.name}@${item.version}`;
@@ -72,7 +73,7 @@ const LicensesScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   contentContainer: {
     paddingTop: 8,

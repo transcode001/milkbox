@@ -1,16 +1,17 @@
 import { StyleSheet } from "react-native";
+import { colors, radii, spacing } from "../tokens";
 
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    padding: 20,
-    paddingTop: 8,
+    padding: spacing.xl,
+    paddingTop: spacing.sm,
     paddingBottom: 32,
   },
   title: {
@@ -27,7 +28,7 @@ export const styles = StyleSheet.create({
   },
   date: {
     fontSize: 12,
-    color: "#999",
+    color: colors.textSecondary,
     marginBottom: 24,
     textAlign: "center",
   },
@@ -51,10 +52,10 @@ export const styles = StyleSheet.create({
     flex: 1,
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   dateSelectorButtonText: {
     fontSize: 14,
@@ -62,19 +63,19 @@ export const styles = StyleSheet.create({
   },
   dateClearButton: {
     backgroundColor: "#f0f0f0",
-    borderRadius: 8,
+    borderRadius: radii.md,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
   dateClearButtonText: {
     fontSize: 12,
-    color: "#555",
+    color: colors.textSecondary,
     fontWeight: "600",
   },
   datePickerPanel: {
     borderWidth: 1,
     borderColor: "#e0e0e0",
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: 8,
     marginBottom: 8,
   },
@@ -83,13 +84,13 @@ export const styles = StyleSheet.create({
   },
   datePickerCloseButton: {
     alignSelf: "flex-end",
-    backgroundColor: "#007AFF",
-    borderRadius: 6,
+    backgroundColor: colors.primary,
+    borderRadius: radii.sm,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   datePickerCloseButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 12,
     fontWeight: "600",
   },
@@ -102,17 +103,17 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   button: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignSelf: "center",
   },
   pickerContainer: {
     marginTop: 8,
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: 10,
   },
   pickerHeader: {
@@ -130,27 +131,29 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   addCategoryButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 4,
+    borderRadius: radii.sm,
   },
   addCategoryButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: "600",
   },
   removeCategoryButton: {
-    backgroundColor: "#dc3545",
+    backgroundColor: colors.destructive,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 4,
+    borderRadius: radii.sm,
   },
   removeCategoryButtonDisabled: {
-    backgroundColor: "#e9a5ad",
+    // 旧#dc3545由来の固定ピンクではなく、colors.destructiveを薄めた同系色にする
+    // (他の無効状態と同じopacityパターンに合わせる)。
+    opacity: 0.45,
   },
   removeCategoryButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 14,
     fontWeight: "600",
   },
@@ -173,18 +176,20 @@ export const styles = StyleSheet.create({
     height: 20,
     borderWidth: 1,
     borderColor: "#888",
+    // radii.smはボタン用トークンでAndroidでは20(=このボックスの半径)になり円形化してしまうため、
+    // 固定サイズのチェックボックスには使わず控えめな角丸を直接指定する。
     borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
     marginRight: 8,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
   },
   checkboxChecked: {
-    backgroundColor: "#007AFF",
-    borderColor: "#007AFF",
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
   },
   checkboxMark: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontWeight: "700",
     lineHeight: 16,
   },
@@ -200,7 +205,7 @@ export const styles = StyleSheet.create({
   },
   reminderPickerItem: {
     height: 120,
-    fontSize: 16,
+    fontSize: 14,
   },
   selectedText: {
     padding: 10,
@@ -208,7 +213,7 @@ export const styles = StyleSheet.create({
     color: "#666",
   },
   buttonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: "600",
   },
@@ -219,23 +224,24 @@ export const styles = StyleSheet.create({
   textarea: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: 12,
     minHeight: 100,
     textAlignVertical: "top",
   },
   submitButton: {
-    backgroundColor: "#28a745",
+    // 画面内の他の青いボタン群と区別できるよう、送信の確定操作だけは専用色を使う。
+    backgroundColor: colors.success,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginTop: 12,
   },
   navigateButton: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 24,
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginTop: 12,
   },
   listContainer: {
@@ -253,7 +259,7 @@ export const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: "#ddd",
-    borderRadius: 8,
+    borderRadius: radii.md,
     marginBottom: 8,
     backgroundColor: "#f9f9f9",
   },
@@ -267,16 +273,16 @@ export const styles = StyleSheet.create({
   },
   itemDate: {
     fontSize: 10,
-    color: "#999",
+    color: colors.textSecondary,
   },
   deleteButton: {
-    backgroundColor: "#dc3545",
+    backgroundColor: colors.destructive,
     paddingVertical: 6,
     paddingHorizontal: 12,
-    borderRadius: 4,
+    borderRadius: radii.sm,
   },
   deleteButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 12,
   },
   modalOverlay: {
@@ -286,8 +292,8 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderRadius: radii.modal,
     padding: 20,
     width: "80%",
     maxWidth: 400,
@@ -306,7 +312,7 @@ export const styles = StyleSheet.create({
   modalInput: {
     borderWidth: 1,
     borderColor: "#ccc",
-    borderRadius: 8,
+    borderRadius: radii.md,
     padding: 12,
     fontSize: 16,
     marginBottom: 16,
@@ -322,33 +328,33 @@ export const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     paddingVertical: 12,
-    borderRadius: 8,
+    borderRadius: radii.md,
     alignItems: "center",
   },
   modalButtonCancel: {
-    backgroundColor: "#ccc",
+    backgroundColor: colors.cancelBackground,
   },
   modalButtonSubmit: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
   },
   modalButtonDanger: {
-    backgroundColor: "#dc3545",
+    backgroundColor: colors.destructive,
   },
   modalButtonText: {
-    color: "#fff",
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: "600",
   },
   sectionHeader: {
-    backgroundColor: "#007AFF",
+    backgroundColor: colors.primary,
     padding: 10,
-    borderRadius: 6,
+    borderRadius: radii.sm,
     marginBottom: 8,
   },
   sectionHeaderText: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#fff",
+    color: colors.onPrimary,
   },
   emptyListText: {
     fontSize: 14,
@@ -358,7 +364,7 @@ export const styles = StyleSheet.create({
   errorText: {
     marginTop: 8,
     fontSize: 13,
-    color: "#dc3545",
+    color: colors.destructive,
     fontWeight: "500",
   },
 });
