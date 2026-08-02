@@ -5,6 +5,9 @@
   "build": {
     "android-apk": {
       "distribution": "internal",
+      "cache": {
+      "disabled": true
+      },
       "android": {
         "buildType": "apk"
       }
