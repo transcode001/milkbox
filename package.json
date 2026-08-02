@@ -18,7 +18,8 @@
     "build:mobile:store": "cd apps/mobile && pnpm dlx eas-cli build --platform all --profile store",
     "lint": "turbo run lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "check-types": "turbo run check-types"
+    "check-types": "turbo run check-types",
+    "test": "turbo run test"
   },
   "devDependencies": {
     "prettier": "^3.7.4",

@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "MilkBox",
-    "slug": "MilkBox",
+    "slug": "mobile",
     "version": "0.1.0",
     "orientation": "portrait",
     "newArchEnabled": true,
