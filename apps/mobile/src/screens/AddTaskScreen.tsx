@@ -13,7 +13,11 @@ import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { DeleteCategoryMode, useCategory } from "../hooks/useCategory";
 import { useDatePicker } from "../hooks/useDatePicker";
 import { useItemForm } from "../hooks/useItemForm";
-import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import {
+  isEndDateBeforeStartDate,
+  resolveScheduleWeekdays,
+  toSavedDate,
+} from "../utils/dateValidation";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 
@@ -66,10 +70,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const {
     startDate,
     endDate,
+    startHasDate,
+    endHasDate,
+    startHasTime,
+    endHasTime,
     activeDatePicker,
     setActiveDatePicker,
-    setStartDate,
-    setEndDate,
     onDateChange,
     openDatePicker,
     clearDate,
@@ -111,7 +117,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
     return [...weekdaySet].sort((left, right) => left - right);
   }, [items, selectedOption]);
-  const effectiveWeekdays = inheritedWeekdays.length > 0 ? inheritedWeekdays : selectedWeekdays;
+  const hasSelectedDate = startHasDate || endHasDate;
+  const effectiveWeekdays = resolveScheduleWeekdays(
+    hasSelectedDate,
+    inheritedWeekdays,
+    selectedWeekdays,
+  );
 
   const toggleWeekday = (weekday: number) => {
     setSelectedWeekdays((current) =>
@@ -141,13 +152,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
       return;
     }
 
-    if (isEndDateBeforeStartDate(startDate, endDate)) {
+    if (isEndDateBeforeStartDate(startDate, endDate, startHasTime, endHasTime)) {
       setDateError("終了日時が開始日時より前です。終了日時を再設定してください。");
-      return;
-    }
-
-    if (!noCategoryChecked && effectiveWeekdays.length === 0) {
-      setDateError("曜日を1つ以上選択してください。");
       return;
     }
 
@@ -158,17 +164,20 @@ const AddTaskScreen = ({ navigation }: Props) => {
       await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
-        startDate: startDate?.toISOString(),
-        endDate: endDate?.toISOString(),
-        weekdays: noCategoryChecked ? undefined : JSON.stringify(effectiveWeekdays),
+        startDate: startDate ? toSavedDate(startDate, startHasTime) : undefined,
+        endDate: endDate ? toSavedDate(endDate, endHasTime) : undefined,
+        weekdays:
+          !noCategoryChecked && effectiveWeekdays.length > 0
+            ? JSON.stringify(effectiveWeekdays)
+            : undefined,
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled,
         notificationMinutesBefore,
       });
 
       setText("");
-      setStartDate(null);
-      setEndDate(null);
+      clearDate("start");
+      clearDate("end");
       setSelectedWeekdays([]);
       setNotificationMinutesBefore(DEFAULT_REMINDER_MINUTES);
       setActiveDatePicker(null);
@@ -416,7 +425,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                           onPress={() => openDatePicker("start", "date")}
                         >
                           <Text style={styles.dateSelectorButtonText}>
-                            {startDate ? formatDate(startDate) : "日付"}
+                            {startDate && startHasDate ? formatDate(startDate) : "日付"}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -424,7 +433,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                           onPress={() => openDatePicker("start", "time")}
                         >
                           <Text style={styles.dateSelectorButtonText}>
-                            {startDate ? formatTime(startDate) : "時間"}
+                            {startDate && startHasTime ? formatTime(startDate) : "時間"}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -444,7 +453,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                           onPress={() => openDatePicker("end", "date")}
                         >
                           <Text style={styles.dateSelectorButtonText}>
-                            {endDate ? formatDate(endDate) : "日付"}
+                            {endDate && endHasDate ? formatDate(endDate) : "日付"}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -452,7 +461,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                           onPress={() => openDatePicker("end", "time")}
                         >
                           <Text style={styles.dateSelectorButtonText}>
-                            {endDate ? formatTime(endDate) : "時間"}
+                            {endDate && endHasTime ? formatTime(endDate) : "時間"}
                           </Text>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -493,15 +502,23 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   {!noCategoryChecked && (
                     <View style={styles.weekdayContainer}>
                       <Text style={styles.dateLabel}>曜日</Text>
-                      {inheritedWeekdays.length > 0 ? (
+                      {hasSelectedDate ? (
+                        <Text style={styles.weekdayHelpText}>
+                          日付を設定しているため、曜日は適用されません。
+                        </Text>
+                      ) : inheritedWeekdays.length > 0 ? (
                         <Text style={styles.weekdayHelpText}>
                           このタスクの登録済み曜日（{formatWeekdayLabels(JSON.stringify(inheritedWeekdays))}）を引き継ぎます。
                         </Text>
-                      ) : null}
+                      ) : (
+                        <Text style={styles.weekdayHelpText}>
+                          日付や曜日は必要に応じて設定できます。
+                        </Text>
+                      )}
                       <WeekdayButtonGroup
                         selectedWeekdays={effectiveWeekdays}
                         onToggleWeekday={toggleWeekday}
-                        disabled={inheritedWeekdays.length > 0}
+                        disabled={hasSelectedDate || inheritedWeekdays.length > 0}
                       />
                     </View>
                   )}

@@ -215,9 +215,7 @@ const HomeScreen = ({ navigation }: Props) => {
   };
 
   const handleCategoryDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS !== "ios") {
-      setShowCategoryDatePicker(null);
-    }
+    setShowCategoryDatePicker(null);
     if (!selectedDate || !showCategoryDatePicker) return;
 
     if (showCategoryDatePicker === "start") {
@@ -228,6 +226,8 @@ const HomeScreen = ({ navigation }: Props) => {
   };
 
   const handleItemDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    // mode="datetime" は iOS では spinner 表示になり、操作中に onChange が
+    // 連続発火するため、iOS では自動で閉じず既存の「閉じる」ボタンに任せる。
     if (Platform.OS !== "ios") {
       setShowItemDatePicker(null);
     }

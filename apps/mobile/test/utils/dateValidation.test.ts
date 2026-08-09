@@ -1,4 +1,8 @@
-import { isEndDateBeforeStartDate } from "../../src/utils/dateValidation";
+import {
+  isEndDateBeforeStartDate,
+  resolveScheduleWeekdays,
+  toSavedDate,
+} from "../../src/utils/dateValidation";
 
 describe("isEndDateBeforeStartDate", () => {
   it("returns false when start date is not set", () => {
@@ -46,5 +50,55 @@ describe("isEndDateBeforeStartDate", () => {
     const end = new Date(2026, 3, 11, 0, 0, 0);
 
     expect(isEndDateBeforeStartDate(start, end)).toBe(false);
+  });
+
+  it("ignores the hidden time-of-day when both dates are date-only and on the same day", () => {
+    // Date-only selections still carry the wall-clock time from when the
+    // date button was tapped internally; a same-day comparison must not
+    // be affected by that incidental time difference.
+    const start = new Date(2026, 3, 10, 21, 0, 0);
+    const end = new Date(2026, 3, 10, 8, 0, 0);
+
+    expect(isEndDateBeforeStartDate(start, end, false, false)).toBe(false);
+  });
+
+  it("still flags an earlier day when both dates are date-only", () => {
+    const start = new Date(2026, 3, 10, 8, 0, 0);
+    const end = new Date(2026, 3, 9, 21, 0, 0);
+
+    expect(isEndDateBeforeStartDate(start, end, false, false)).toBe(true);
+  });
+
+  it("compares exact times when both dates have an explicit time", () => {
+    const start = new Date(2026, 3, 10, 21, 0, 0);
+    const end = new Date(2026, 3, 10, 8, 0, 0);
+
+    expect(isEndDateBeforeStartDate(start, end, true, true)).toBe(true);
+  });
+});
+
+describe("toSavedDate", () => {
+  const date = new Date(2026, 7, 9, 14, 30);
+
+  it("stores a date-only selection without a time component", () => {
+    expect(toSavedDate(date, false)).toBe("2026-08-09");
+  });
+
+  it("stores an explicitly selected time as an ISO datetime", () => {
+    expect(toSavedDate(date, true)).toBe(date.toISOString());
+  });
+});
+
+describe("resolveScheduleWeekdays", () => {
+  it("does not apply weekdays when a date is set", () => {
+    expect(resolveScheduleWeekdays(true, [1, 3], [5])).toEqual([]);
+  });
+
+  it("inherits registered weekdays when a date is not set", () => {
+    expect(resolveScheduleWeekdays(false, [1, 3], [5])).toEqual([1, 3]);
+  });
+
+  it("uses selected weekdays when there are no inherited weekdays", () => {
+    expect(resolveScheduleWeekdays(false, [], [5])).toEqual([5]);
   });
 });
