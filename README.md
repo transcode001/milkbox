@@ -148,6 +148,10 @@ See [`apps/mobile/README.md`](apps/mobile/README.md) for the profile mapping and
 mobile-specific details. For a step-by-step local Android build walkthrough (in Japanese),
 see [`docs/build-android.md`](docs/build-android.md).
 
+For coding agents working in this repo, see [`AGENTS.md`](AGENTS.md) for project context
+and [`docs/codex-prompts.md`](docs/codex-prompts.md) for reusable task prompt templates
+(in Japanese).
+
 ## Tech Stack
 
 - **Language**: TypeScript
