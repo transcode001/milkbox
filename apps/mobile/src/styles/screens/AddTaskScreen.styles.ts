@@ -14,24 +14,6 @@ export const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: 32,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "#666",
-    marginBottom: 16,
-    textAlign: "center",
-  },
-  date: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 24,
-    textAlign: "center",
-  },
   dateLabel: {
     fontSize: 14,
     fontWeight: "600",
@@ -94,20 +76,10 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
   },
-  weekdayContainer: {
-    marginTop: 12,
-  },
-  weekdayHelpText: {
+  categoryWeekdayHelp: {
     fontSize: 12,
-    color: "#666",
-    marginBottom: 8,
-  },
-  button: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: radii.md,
-    alignSelf: "center",
+    color: colors.textSecondary,
+    marginTop: 8,
   },
   pickerContainer: {
     marginTop: 8,
@@ -116,55 +88,32 @@ export const styles = StyleSheet.create({
     borderRadius: radii.md,
     padding: 10,
   },
-  pickerHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  pickerActions: {
-    flexDirection: "row",
-    gap: 8,
-  },
   pickerLabel: {
     fontSize: 14,
     fontWeight: "600",
   },
-  addCategoryButton: {
-    backgroundColor: colors.primary,
+  addCategoryOption: {
+    minHeight: 48,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.sm,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
-  addCategoryButtonText: {
-    color: colors.onPrimary,
-    fontSize: 14,
+  addCategoryOptionText: {
+    fontSize: 16,
+    color: colors.primary,
     fontWeight: "600",
   },
-  removeCategoryButton: {
-    backgroundColor: colors.destructive,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: radii.sm,
+  categoryActions: {
+    flexDirection: "row",
+    flexShrink: 0,
   },
-  removeCategoryButtonDisabled: {
-    // 旧#dc3545由来の固定ピンクではなく、colors.destructiveを薄めた同系色にする
-    // (他の無効状態と同じopacityパターンに合わせる)。
-    opacity: 0.45,
-  },
-  removeCategoryButtonText: {
-    color: colors.onPrimary,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  picker: {
-    height: 150,
-  },
-  pickerDisabled: {
-    opacity: 0.5,
-  },
-  pickerItem: {
-    height: 150,
+  categoryActionButton: {
+    width: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: colors.tabInactive,
   },
   checkboxRow: {
     flexDirection: "row",
@@ -198,19 +147,8 @@ export const styles = StyleSheet.create({
     color: "#333",
   },
   reminderContainer: {
+    marginTop: 8,
     marginBottom: 8,
-  },
-  reminderPicker: {
-    height: 120,
-  },
-  reminderPickerItem: {
-    height: 120,
-    fontSize: 14,
-  },
-  selectedText: {
-    padding: 10,
-    fontSize: 14,
-    color: "#666",
   },
   buttonText: {
     color: colors.onPrimary,
@@ -226,7 +164,7 @@ export const styles = StyleSheet.create({
     borderColor: "#ccc",
     borderRadius: radii.md,
     padding: 12,
-    minHeight: 100,
+    minHeight: 180,
     textAlignVertical: "top",
   },
   submitButton: {
@@ -236,54 +174,6 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderRadius: radii.md,
     marginTop: 12,
-  },
-  navigateButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: radii.md,
-    marginTop: 12,
-  },
-  listContainer: {
-    marginTop: 20,
-  },
-  listTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 10,
-  },
-  itemContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: radii.md,
-    marginBottom: 8,
-    backgroundColor: "#f9f9f9",
-  },
-  itemTextContainer: {
-    flex: 1,
-    marginRight: 10,
-  },
-  itemText: {
-    fontSize: 14,
-    marginBottom: 4,
-  },
-  itemDate: {
-    fontSize: 10,
-    color: colors.textSecondary,
-  },
-  deleteButton: {
-    backgroundColor: colors.destructive,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: radii.sm,
-  },
-  deleteButtonText: {
-    color: colors.onPrimary,
-    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,
@@ -317,13 +207,24 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 16,
   },
+  modalFieldLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+  modalFieldHelp: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  modalWeekdayGroup: {
+    width: "100%",
+    marginBottom: 4,
+  },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 12,
-  },
-  modalActionStack: {
-    gap: 8,
   },
   modalButton: {
     flex: 1,
@@ -337,29 +238,10 @@ export const styles = StyleSheet.create({
   modalButtonSubmit: {
     backgroundColor: colors.primary,
   },
-  modalButtonDanger: {
-    backgroundColor: colors.destructive,
-  },
   modalButtonText: {
     color: colors.onPrimary,
     fontSize: 16,
     fontWeight: "600",
-  },
-  sectionHeader: {
-    backgroundColor: colors.primary,
-    padding: 10,
-    borderRadius: radii.sm,
-    marginBottom: 8,
-  },
-  sectionHeaderText: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: colors.onPrimary,
-  },
-  emptyListText: {
-    fontSize: 14,
-    color: "#666",
-    paddingVertical: 12,
   },
   errorText: {
     marginTop: 8,

@@ -29,8 +29,7 @@ export function toSavedDate(date: Date, hasTime: boolean): string {
 export function resolveScheduleWeekdays(
   hasDate: boolean,
   inheritedWeekdays: number[],
-  selectedWeekdays: number[],
 ): number[] {
   if (hasDate) return [];
-  return inheritedWeekdays.length > 0 ? inheritedWeekdays : selectedWeekdays;
+  return inheritedWeekdays;
 }

@@ -15,16 +15,15 @@ export interface UseCategoryResult {
   selectedCategoryName: string;
   noCategoryChecked: boolean;
   showAddCategoryModal: boolean;
-  showDeleteCategoryModal: boolean;
   newCategoryName: string;
   setSelectedOption: React.Dispatch<React.SetStateAction<string>>;
   setNoCategoryChecked: React.Dispatch<React.SetStateAction<boolean>>;
   setShowAddCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
-  setShowDeleteCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
   setNewCategoryName: React.Dispatch<React.SetStateAction<string>>;
   loadCategories: () => Promise<void>;
-  handleAddCategory: () => Promise<void>;
-  handleDeleteCategory: (mode: DeleteCategoryMode, loadItems: () => Promise<void>) => Promise<void>;
+  handleAddCategory: (weekdays?: number[]) => Promise<boolean>;
+  handleUpdateCategory: (categoryId: number, name: string, weekdays: number[]) => Promise<boolean>;
+  handleDeleteCategory: (categoryId: number, mode: DeleteCategoryMode) => Promise<void>;
 }
 
 export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult => {
@@ -33,7 +32,6 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   const [noCategoryChecked, setNoCategoryChecked] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [showDeleteCategoryModal, setShowDeleteCategoryModal] = useState(false);
 
   const selectedCategoryName = useMemo(() => {
     const current = categories.find((category) => category.id.toString() === selectedOption);
@@ -59,47 +57,72 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
     }
   }, [dbManager]);
 
-  const handleAddCategory = useCallback(async () => {
+  const handleAddCategory = useCallback(async (weekdays?: number[]) => {
     if (!newCategoryName.trim()) {
       Alert.alert("Error", "Please enter category name");
-      return;
+      return false;
     }
 
     try {
-      await dbManager.categoryRepository.create(newCategoryName);
+      await dbManager.categoryRepository.create(
+        newCategoryName,
+        weekdays && weekdays.length > 0 ? JSON.stringify(weekdays) : undefined,
+      );
       setNewCategoryName("");
       setShowAddCategoryModal(false);
       await loadCategories();
       Alert.alert("Success", "Category added!");
+      return true;
     } catch {
       Alert.alert("Error", "Failed to add category");
+      return false;
     }
   }, [dbManager, loadCategories, newCategoryName]);
 
-  const handleDeleteCategory = useCallback(
-    async (mode: DeleteCategoryMode, loadItems: () => Promise<void>) => {
-      if (!selectedOption) {
-        return;
+  const handleUpdateCategory = useCallback(async (
+    categoryId: number,
+    name: string,
+    weekdays: number[],
+  ) => {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      Alert.alert("Error", "カテゴリ名を入力してください");
+      return false;
+    }
+
+    try {
+      await dbManager.updateCategory(
+        categoryId,
+        trimmedName,
+        weekdays.length > 0 ? JSON.stringify(weekdays) : null,
+      );
+      await loadCategories();
+      Alert.alert("完了", "カテゴリ内容を変更しました");
+      return true;
+    } catch {
+      Alert.alert("Error", "カテゴリの更新に失敗しました");
+      return false;
+    }
+  }, [dbManager, loadCategories]);
+
+  const handleDeleteCategory = useCallback(async (
+    categoryId: number,
+    mode: DeleteCategoryMode,
+  ) => {
+    try {
+      if (mode === "delete") {
+        await dbManager.deleteItemsByCategoryId(categoryId);
+      } else {
+        await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
       }
 
-      const categoryId = Number(selectedOption);
-
-      try {
-        if (mode === "delete") {
-          await dbManager.deleteItemsByCategoryId(categoryId);
-        } else {
-          await dbManager.itemRepository.clearCategoryByCategoryId(categoryId);
-        }
-
-        await dbManager.categoryRepository.delete(categoryId);
-        setSelectedOption("");
-        await Promise.all([loadCategories(), loadItems()]);
-      } catch {
-        Alert.alert("Error", "タスクの削除に失敗しました");
-      }
-    },
-    [dbManager, loadCategories, selectedOption],
-  );
+      await dbManager.categoryRepository.delete(categoryId);
+      setSelectedOption((current) => current === categoryId.toString() ? "" : current);
+      await loadCategories();
+    } catch {
+      Alert.alert("Error", "カテゴリの削除に失敗しました");
+    }
+  }, [dbManager, loadCategories]);
 
   return {
     categories,
@@ -107,15 +130,14 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
     selectedCategoryName,
     noCategoryChecked,
     showAddCategoryModal,
-    showDeleteCategoryModal,
     newCategoryName,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
-    setShowDeleteCategoryModal,
     setNewCategoryName,
     loadCategories,
     handleAddCategory,
+    handleUpdateCategory,
     handleDeleteCategory,
   };
 };

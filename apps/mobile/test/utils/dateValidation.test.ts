@@ -91,14 +91,10 @@ describe("toSavedDate", () => {
 
 describe("resolveScheduleWeekdays", () => {
   it("does not apply weekdays when a date is set", () => {
-    expect(resolveScheduleWeekdays(true, [1, 3], [5])).toEqual([]);
+    expect(resolveScheduleWeekdays(true, [1, 3])).toEqual([]);
   });
 
   it("inherits registered weekdays when a date is not set", () => {
-    expect(resolveScheduleWeekdays(false, [1, 3], [5])).toEqual([1, 3]);
-  });
-
-  it("uses selected weekdays when there are no inherited weekdays", () => {
-    expect(resolveScheduleWeekdays(false, [], [5])).toEqual([5]);
+    expect(resolveScheduleWeekdays(false, [1, 3])).toEqual([1, 3]);
   });
 });
