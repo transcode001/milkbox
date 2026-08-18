@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,10 +21,15 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import type { Category, SavedItem } from "@milkbox/shared";
+import {
+  DEFAULT_REMINDER_MINUTES,
+  NONE_REMINDER_VALUE,
+  type Category,
+  type SavedItem,
+} from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
-import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
+import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
@@ -38,21 +43,6 @@ const parseOptionalDate = (value?: string | null): Date | null => {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
-};
-
-const formatDateOnly = (value: Date | null): string => {
-  if (!value) return "未設定";
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}.${month}.${day}`;
-};
-
-const toLocalDateString = (value: Date): string => {
-  const year = value.getFullYear();
-  const month = String(value.getMonth() + 1).padStart(2, "0");
-  const day = String(value.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
 };
 
 const formatCategoryWeekdays = (section: CategorySection, category?: Category): string | null => {
@@ -79,18 +69,9 @@ const HomeScreen = ({ navigation }: Props) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editingCategory, setEditingCategory] = useState<{
     id: number;
-    name: string;
-    weekdays: number[];
-    startDate: Date | null;
-    endDate: Date | null;
   } | null>(null);
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryWeekdays, setEditCategoryWeekdays] = useState<number[]>([]);
-  const [editCategoryStartDate, setEditCategoryStartDate] = useState<Date | null>(null);
-  const [editCategoryEndDate, setEditCategoryEndDate] = useState<Date | null>(null);
-  const [showCategoryDatePicker, setShowCategoryDatePicker] = useState<
-    "start" | "end" | null
-  >(null);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
@@ -98,6 +79,8 @@ const HomeScreen = ({ navigation }: Props) => {
   const [showItemDatePicker, setShowItemDatePicker] = useState<
     "start" | "end" | null
   >(null);
+  const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
+  const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
@@ -138,20 +121,39 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
+  const handleToggleItemNotification = async (item: SavedItem) => {
+    if (togglingNotificationRef.current) return;
+    togglingNotificationRef.current = true;
+
+    const enabled = !item.notificationEnabled;
+    const notificationMinutesBefore = enabled
+      ? item.notificationMinutesBefore === NONE_REMINDER_VALUE
+        ? DEFAULT_REMINDER_MINUTES
+        : item.notificationMinutesBefore
+      : NONE_REMINDER_VALUE;
+
+    try {
+      setTogglingNotificationItemId(item.id);
+      await dbManager.updateItem(item.id, {
+        notificationEnabled: enabled,
+        notificationMinutesBefore,
+      });
+      await loadItems();
+    } catch {
+      Alert.alert("エラー", "通知設定の更新に失敗しました");
+    } finally {
+      togglingNotificationRef.current = false;
+      setTogglingNotificationItemId(null);
+    }
+  };
+
   const openCategoryEditor = (category: Category) => {
     const weekdays = parseWeekdays(category.weekdays);
     setEditingCategory({
       id: category.id,
-      name: category.name,
-      weekdays,
-      startDate: parseOptionalDate(category.startDate),
-      endDate: parseOptionalDate(category.endDate),
     });
     setEditCategoryName(category.name);
     setEditCategoryWeekdays(weekdays);
-    setEditCategoryStartDate(parseOptionalDate(category.startDate));
-    setEditCategoryEndDate(parseOptionalDate(category.endDate));
-    setShowCategoryDatePicker(null);
   };
 
   const openItemEditor = (item: SavedItem) => {
@@ -172,23 +174,23 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleUpdateCategory = async () => {
     if (!editingCategory) return;
-    if (isEndDateBeforeStartDate(editCategoryStartDate, editCategoryEndDate)) {
-      Alert.alert("エラー", "終了日が開始日より前です。終了日を再設定してください。");
+    const trimmedName = editCategoryName.trim();
+    if (!trimmedName) {
+      Alert.alert("Error", "カテゴリ名を入力してください");
       return;
     }
 
     try {
       await dbManager.updateCategory(
         editingCategory.id,
-        editCategoryName || undefined,
+        trimmedName,
         editCategoryWeekdays.length > 0
           ? JSON.stringify(editCategoryWeekdays)
           : null,
-        editCategoryStartDate ? toLocalDateString(editCategoryStartDate) : null,
-        editCategoryEndDate ? toLocalDateString(editCategoryEndDate) : null,
       );
       setEditingCategory(null);
       await loadItems();
+      Alert.alert("完了", "カテゴリ内容を変更しました");
     } catch {
       Alert.alert("エラー", "タスクの更新に失敗しました");
     }
@@ -214,20 +216,9 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
-  const handleCategoryDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (Platform.OS !== "ios") {
-      setShowCategoryDatePicker(null);
-    }
-    if (!selectedDate || !showCategoryDatePicker) return;
-
-    if (showCategoryDatePicker === "start") {
-      setEditCategoryStartDate(selectedDate);
-    } else {
-      setEditCategoryEndDate(selectedDate);
-    }
-  };
-
   const handleItemDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
+    // mode="datetime" は iOS では spinner 表示になり、操作中に onChange が
+    // 連続発火するため、iOS では自動で閉じず既存の「閉じる」ボタンに任せる。
     if (Platform.OS !== "ios") {
       setShowItemDatePicker(null);
     }
@@ -284,98 +275,15 @@ const HomeScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Modal
+      <CategoryEditorModal
         visible={editingCategory !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setEditingCategory(null)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>タスクを編集</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={editCategoryName}
-              onChangeText={setEditCategoryName}
-              placeholder="タスク名"
-              returnKeyType="done"
-            />
-            <Text style={styles.fieldLabel}>曜日</Text>
-            <WeekdayButtonGroup
-              selectedWeekdays={editCategoryWeekdays}
-              onToggleWeekday={toggleEditCategoryWeekday}
-            />
-            <View style={styles.dateRow}>
-              <View style={styles.dateColumn}>
-                <Text style={styles.fieldLabel}>開始日</Text>
-                <TouchableOpacity
-                  style={styles.dateSelectorButton}
-                  onPress={() => setShowCategoryDatePicker("start")}
-                >
-                  <Text style={styles.dateSelectorButtonText}>
-                    {formatDateOnly(editCategoryStartDate)}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.dateColumn}>
-                <Text style={styles.fieldLabel}>終了日</Text>
-                <TouchableOpacity
-                  style={styles.dateSelectorButton}
-                  onPress={() => setShowCategoryDatePicker("end")}
-                >
-                  <Text style={styles.dateSelectorButtonText}>
-                    {formatDateOnly(editCategoryEndDate)}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            {showCategoryDatePicker && (
-              <View style={styles.datePickerPanel}>
-                <DateTimePicker
-                  value={
-                    showCategoryDatePicker === "start"
-                      ? editCategoryStartDate ?? new Date()
-                      : editCategoryEndDate ?? new Date()
-                  }
-                  mode="date"
-                  display={Platform.OS === "ios" ? "inline" : "calendar"}
-                  onChange={handleCategoryDateChange}
-                  locale="ja-JP"
-                />
-                {Platform.OS === "ios" && (
-                  <TouchableOpacity
-                    style={styles.datePickerCloseButton}
-                    onPress={() => setShowCategoryDatePicker(null)}
-                  >
-                    <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            )}
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setEditingCategory(null)}
-              >
-                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
-                  キャンセル
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit]}
-                onPress={() => {
-                  void handleUpdateCategory();
-                }}
-              >
-                <Text style={styles.modalButtonText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        name={editCategoryName}
+        weekdays={editCategoryWeekdays}
+        onChangeName={setEditCategoryName}
+        onToggleWeekday={toggleEditCategoryWeekday}
+        onCancel={() => setEditingCategory(null)}
+        onSave={() => void handleUpdateCategory()}
+      />
 
       <Modal
         visible={editingItem !== null}
@@ -540,18 +448,41 @@ const HomeScreen = ({ navigation }: Props) => {
 
             return (
               <Swipeable renderRightActions={() => renderRightActions(item.id)}>
-                <TouchableOpacity
-                  style={styles.itemContainer}
-                  onPress={() => openItemEditor(item)}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.itemMainRow}>
-                    <Text style={styles.itemText}>{item.text}</Text>
-                    {hasDateRange(item) && dateTimeRange ? (
-                      <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
-                    ) : null}
-                  </View>
-                </TouchableOpacity>
+                <View style={styles.itemContainer}>
+                  <TouchableOpacity
+                    style={styles.itemEditButton}
+                    onPress={() => openItemEditor(item)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.itemMainRow}>
+                      <Text style={styles.itemText}>{item.text}</Text>
+                      {hasDateRange(item) && dateTimeRange ? (
+                        <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
+                      ) : null}
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.notificationToggle}
+                    onPress={() => void handleToggleItemNotification(item)}
+                    disabled={togglingNotificationItemId !== null}
+                    accessibilityRole="checkbox"
+                    accessibilityLabel={`${item.text}の通知`}
+                    accessibilityState={{
+                      checked: item.notificationEnabled,
+                      disabled: togglingNotificationItemId !== null,
+                    }}
+                  >
+                    <View style={[
+                      styles.notificationCheckbox,
+                      item.notificationEnabled && styles.notificationCheckboxChecked,
+                    ]}>
+                      {item.notificationEnabled ? (
+                        <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+                      ) : null}
+                    </View>
+                    <Text style={styles.notificationToggleText}>通知</Text>
+                  </TouchableOpacity>
+                </View>
               </Swipeable>
             );
           }}
@@ -635,11 +566,16 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   itemContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.background,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
+  },
+  itemEditButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   itemMainRow: {
     flexDirection: "row",
@@ -655,6 +591,31 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     color: "#666",
     fontSize: 12,
+  },
+  notificationToggle: {
+    minHeight: 44,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  notificationCheckbox: {
+    width: 20,
+    height: 20,
+    borderWidth: 1,
+    borderColor: colors.tabInactive,
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.background,
+  },
+  notificationCheckboxChecked: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary,
+  },
+  notificationToggleText: {
+    fontSize: 12,
+    color: colors.textSecondary,
   },
   stateContainer: {
     flex: 1,

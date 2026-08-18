@@ -18,6 +18,12 @@ export class DatabaseManager {
     this.categoryRepository = new SQLiteCategoryRepository();
   }
 
+  private scheduleItemNotifications(item: SavedItem): void {
+    void scheduleTaskNotificationsAsync(item).catch((error: unknown) => {
+      console.warn(`Notification scheduling failed for item ${item.id}`, error);
+    });
+  }
+
   async initialize(): Promise<void> {
     this.db = await SQLite.openDatabaseAsync('milkbox.db');
     
@@ -38,11 +44,7 @@ export class DatabaseManager {
 
   async createItem(data: CreateItemDto): Promise<SavedItem> {
     const item = await this.itemRepository.create(data);
-    try {
-      await scheduleTaskNotificationsAsync(item);
-    } catch (error) {
-      console.warn(`Notification scheduling failed for item ${item.id}`, error);
-    }
+    this.scheduleItemNotifications(item);
     return item;
   }
 
@@ -54,11 +56,7 @@ export class DatabaseManager {
     await this.itemRepository.update(id, data);
     const item = await this.itemRepository.findById(id);
     if (item) {
-      try {
-        await scheduleTaskNotificationsAsync(item);
-      } catch (error) {
-        console.warn(`Notification scheduling failed for item ${item.id}`, error);
-      }
+      this.scheduleItemNotifications(item);
     } else {
       await cancelTaskNotificationsAsync(id);
     }
@@ -76,17 +74,10 @@ export class DatabaseManager {
   ): Promise<void> {
     await this.categoryRepository.update(id, name, weekdays, startDate, endDate);
 
-    const items = await this.itemRepository.findAll();
-    const targets = items.filter((item) => item.categoryId === id);
-    await Promise.all(
-      targets.map(async (item) => {
-        try {
-          await scheduleTaskNotificationsAsync(item);
-        } catch (error) {
-          console.warn(`Notification scheduling failed for item ${item.id}`, error);
-        }
-      }),
-    );
+    const targets = await this.itemRepository.findByCategoryId(id);
+    // 通知APIが応答を返さない環境（Expo Goを含む）でも、カテゴリ編集の保存を
+    // ブロックしないよう再スケジュールはバックグラウンドで継続する。
+    targets.forEach((item) => this.scheduleItemNotifications(item));
   }
 
   async deleteItem(id: number): Promise<void> {
@@ -95,8 +86,7 @@ export class DatabaseManager {
   }
 
   async deleteItemsByCategoryId(categoryId: number): Promise<void> {
-    const items = await this.itemRepository.findAll();
-    const categoryItems = items.filter((item) => item.categoryId === categoryId);
+    const categoryItems = await this.itemRepository.findByCategoryId(categoryId);
 
     for (const item of categoryItems) {
       await cancelTaskNotificationsAsync(item.id);

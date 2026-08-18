@@ -169,6 +169,15 @@ export class SQLiteItemRepository implements IItemRepository {
     return rows.map((row) => this.normalizeItem(row));
   }
 
+  async findByCategoryId(categoryId: number): Promise<SavedItem[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<SQLiteSavedItemRow>(
+      'SELECT * FROM items WHERE categoryId = ? ORDER BY id DESC',
+      [categoryId]
+    );
+    return rows.map((row) => this.normalizeItem(row));
+  }
+
   async findAllWithCategory(): Promise<SavedItem[]> {
     if (!this.db) throw new Error('Database not initialized');
     const rows = await this.db.getAllAsync<SQLiteSavedItemRow>(`

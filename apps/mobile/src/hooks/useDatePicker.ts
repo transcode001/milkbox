@@ -9,10 +9,12 @@ export type ActiveDatePicker = { field: DateField; mode: DatePickerMode } | null
 export interface UseDatePickerResult {
   startDate: Date | null;
   endDate: Date | null;
+  startHasDate: boolean;
+  endHasDate: boolean;
+  startHasTime: boolean;
+  endHasTime: boolean;
   activeDatePicker: ActiveDatePicker;
   setActiveDatePicker: React.Dispatch<React.SetStateAction<ActiveDatePicker>>;
-  setStartDate: React.Dispatch<React.SetStateAction<Date | null>>;
-  setEndDate: React.Dispatch<React.SetStateAction<Date | null>>;
   onDateChange: (event: DateTimePickerEvent, selectedDate?: Date) => void;
   openDatePicker: (field: DateField, mode?: DatePickerMode) => void;
   clearDate: (field: DateField) => void;
@@ -50,6 +52,10 @@ const mergeTimePart = (current: Date | null, selectedDate: Date): Date => {
 export const useDatePicker = (): UseDatePickerResult => {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [startHasDate, setStartHasDate] = useState(false);
+  const [endHasDate, setEndHasDate] = useState(false);
+  const [startHasTime, setStartHasTime] = useState(false);
+  const [endHasTime, setEndHasTime] = useState(false);
   const [activeDatePicker, setActiveDatePicker] = useState<ActiveDatePicker>(null);
 
   const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
@@ -75,11 +81,18 @@ export const useDatePicker = (): UseDatePickerResult => {
 
     if (activeDatePicker.field === "start") {
       setStartDate((current) => updateValue(current));
+      if (activeDatePicker.mode === "date") setStartHasDate(true);
+      if (activeDatePicker.mode === "time") setStartHasTime(true);
     } else {
       setEndDate((current) => updateValue(current));
+      if (activeDatePicker.mode === "date") setEndHasDate(true);
+      if (activeDatePicker.mode === "time") setEndHasTime(true);
     }
 
-    if (Platform.OS === "android") {
+    // iOS の time スピナーは操作中に onChange が連続発火するため、date
+    // (カレンダー/1タップ選択) のときだけ自動で閉じる。time は既存の「閉じる」
+    // ボタンでユーザーが確定するまでパネルを開いたままにする。
+    if (Platform.OS === "android" || activeDatePicker.mode === "date") {
       setActiveDatePicker(null);
     }
   };
@@ -91,8 +104,12 @@ export const useDatePicker = (): UseDatePickerResult => {
   const clearDate = (field: DateField) => {
     if (field === "start") {
       setStartDate(null);
+      setStartHasDate(false);
+      setStartHasTime(false);
     } else {
       setEndDate(null);
+      setEndHasDate(false);
+      setEndHasTime(false);
     }
   };
 
@@ -118,10 +135,12 @@ export const useDatePicker = (): UseDatePickerResult => {
   return {
     startDate,
     endDate,
+    startHasDate,
+    endHasDate,
+    startHasTime,
+    endHasTime,
     activeDatePicker,
     setActiveDatePicker,
-    setStartDate,
-    setEndDate,
     onDateChange,
     openDatePicker,
     clearDate,
