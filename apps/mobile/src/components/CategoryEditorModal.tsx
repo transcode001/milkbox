@@ -12,13 +12,17 @@ import {
 import { modalStyles } from "../styles/modalStyles";
 import { colors, radii } from "../styles/tokens";
 import { WeekdayButtonGroup } from "./WeekdayButtonGroup";
+import { ColorPicker } from "./ColorPicker";
+import { DEFAULT_COLORS } from "../constants/colors";
 
 interface CategoryEditorModalProps {
   visible: boolean;
   name: string;
   weekdays: number[];
+  color: string;
   onChangeName: (name: string) => void;
   onToggleWeekday: (weekday: number) => void;
+  onChangeColor: (color: string) => void;
   onCancel: () => void;
   onSave: () => void;
 }
@@ -27,8 +31,10 @@ export const CategoryEditorModal = ({
   visible,
   name,
   weekdays,
+  color,
   onChangeName,
   onToggleWeekday,
+  onChangeColor,
   onCancel,
   onSave,
 }: CategoryEditorModalProps) => (
@@ -57,6 +63,12 @@ export const CategoryEditorModal = ({
         <WeekdayButtonGroup
           selectedWeekdays={weekdays}
           onToggleWeekday={onToggleWeekday}
+        />
+        <Text style={styles.colorLabel}>色</Text>
+        <ColorPicker
+          value={color}
+          defaultColor={DEFAULT_COLORS.category}
+          onChange={onChangeColor}
         />
         <View style={styles.buttons}>
           <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel}>
@@ -108,6 +120,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textSecondary,
     marginBottom: 8,
+  },
+  colorLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    marginTop: 14,
+    marginBottom: 6,
   },
   buttons: {
     flexDirection: "row",

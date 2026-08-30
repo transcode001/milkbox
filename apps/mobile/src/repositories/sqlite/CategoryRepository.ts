@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import type { Category } from '@milkbox/shared';
+import { DEFAULT_COLORS } from '../../constants/colors';
 
 export class SQLiteCategoryRepository {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -16,7 +17,8 @@ export class SQLiteCategoryRepository {
         name TEXT NOT NULL UNIQUE,
         weekdays TEXT,
         startDate TEXT,
-        endDate TEXT
+        endDate TEXT,
+        color TEXT NOT NULL DEFAULT '${DEFAULT_COLORS.category}'
       );
     `);
 
@@ -33,6 +35,11 @@ export class SQLiteCategoryRepository {
     }
     if (!columnNames.includes('endDate')) {
       await this.db.execAsync('ALTER TABLE categories ADD COLUMN endDate TEXT;');
+    }
+    if (!columnNames.includes('color')) {
+      await this.db.execAsync(
+        `ALTER TABLE categories ADD COLUMN color TEXT NOT NULL DEFAULT '${DEFAULT_COLORS.category}';`
+      );
     }
   }
 
@@ -57,11 +64,12 @@ export class SQLiteCategoryRepository {
     weekdays?: string,
     startDate?: string,
     endDate?: string,
+    color: string = DEFAULT_COLORS.category,
   ): Promise<Category> {
     if (!this.db) throw new Error('Database not initialized');
     const result = await this.db.runAsync(
-      'INSERT INTO categories (name, weekdays, startDate, endDate) VALUES (?, ?, ?, ?)',
-      [name, weekdays ?? null, startDate ?? null, endDate ?? null]
+      'INSERT INTO categories (name, weekdays, startDate, endDate, color) VALUES (?, ?, ?, ?, ?)',
+      [name, weekdays ?? null, startDate ?? null, endDate ?? null, color]
     );
     return {
       id: result.lastInsertRowId,
@@ -69,6 +77,7 @@ export class SQLiteCategoryRepository {
       weekdays: weekdays ?? null,
       startDate: startDate ?? null,
       endDate: endDate ?? null,
+      color,
     };
   }
 
@@ -78,6 +87,7 @@ export class SQLiteCategoryRepository {
     weekdays?: string | null,
     startDate?: string | null,
     endDate?: string | null,
+    color?: string,
   ): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     const updates: string[] = [];
@@ -98,6 +108,10 @@ export class SQLiteCategoryRepository {
     if (endDate !== undefined) {
       updates.push('endDate = ?');
       params.push(endDate);
+    }
+    if (color !== undefined) {
+      updates.push('color = ?');
+      params.push(color);
     }
     if (updates.length === 0) return;
 

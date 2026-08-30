@@ -71,8 +71,9 @@ export class DatabaseManager {
     weekdays?: string | null,
     startDate?: string | null,
     endDate?: string | null,
+    color?: string,
   ): Promise<void> {
-    await this.categoryRepository.update(id, name, weekdays, startDate, endDate);
+    await this.categoryRepository.update(id, name, weekdays, startDate, endDate, color);
 
     const targets = await this.itemRepository.findByCategoryId(id);
     // 通知APIが応答を返さない環境（Expo Goを含む）でも、カテゴリ編集の保存を

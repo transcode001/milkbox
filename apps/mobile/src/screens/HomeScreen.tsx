@@ -33,6 +33,7 @@ import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { DEFAULT_COLORS } from "../constants/colors";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
@@ -72,6 +73,7 @@ const HomeScreen = ({ navigation }: Props) => {
   } | null>(null);
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryWeekdays, setEditCategoryWeekdays] = useState<number[]>([]);
+  const [editCategoryColor, setEditCategoryColor] = useState<string>(DEFAULT_COLORS.category);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
@@ -154,6 +156,7 @@ const HomeScreen = ({ navigation }: Props) => {
     });
     setEditCategoryName(category.name);
     setEditCategoryWeekdays(weekdays);
+    setEditCategoryColor(category.color);
   };
 
   const openItemEditor = (item: SavedItem) => {
@@ -187,6 +190,9 @@ const HomeScreen = ({ navigation }: Props) => {
         editCategoryWeekdays.length > 0
           ? JSON.stringify(editCategoryWeekdays)
           : null,
+        undefined,
+        undefined,
+        editCategoryColor,
       );
       setEditingCategory(null);
       await loadItems();
@@ -279,8 +285,10 @@ const HomeScreen = ({ navigation }: Props) => {
         visible={editingCategory !== null}
         name={editCategoryName}
         weekdays={editCategoryWeekdays}
+        color={editCategoryColor}
         onChangeName={setEditCategoryName}
         onToggleWeekday={toggleEditCategoryWeekday}
+        onChangeColor={setEditCategoryColor}
         onCancel={() => setEditingCategory(null)}
         onSave={() => void handleUpdateCategory()}
       />
@@ -455,6 +463,12 @@ const HomeScreen = ({ navigation }: Props) => {
                     activeOpacity={0.8}
                   >
                     <View style={styles.itemMainRow}>
+                      <View
+                        style={[
+                          styles.itemColorIndicator,
+                          { backgroundColor: item.color || DEFAULT_COLORS.task },
+                        ]}
+                      />
                       <Text style={styles.itemText}>{item.text}</Text>
                       {hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
@@ -581,6 +595,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  itemColorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    flexShrink: 0,
   },
   itemText: {
     flexShrink: 1,

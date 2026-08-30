@@ -2,6 +2,7 @@ import type { SavedItem } from "@milkbox/shared";
 import { formatScheduleTime, formatTimeOfDay } from "../../src/screens/CalendarScreen";
 
 const baseItem: SavedItem = {
+  color: "#7986CB",
   id: 1,
   text: "テストタスク",
   date: "2026-01-06T00:00:00",

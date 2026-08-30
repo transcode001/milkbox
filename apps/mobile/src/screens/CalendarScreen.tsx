@@ -16,20 +16,15 @@ import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
 import { colors } from "../styles/tokens";
 
-// 各エントリはbg(塗り)/border(縁取り)/light(バッジ背景)/lightText(バッジ文字)の
-// 4色が意図的に異なるコントラスト・区別のために設計されている。
-// トークン統一のためcolors.primaryへ一本化すると縁取りが塗りと同色になり見えなくなる、
-// バッジ文字のコントラストが下がるなどの見た目のリグレッションが起きるため、
-// このパレットはトークン化せず既存の専用配色のままにする。
-const BAR_PALETTE = [
-  { bg: "#3B82F6", border: "#2563EB", light: "#DBEAFE", lightText: "#1D4ED8" },
-  { bg: "#10B981", border: "#059669", light: "#D1FAE5", lightText: "#065F46" },
-  { bg: "#8B5CF6", border: "#7C3AED", light: "#EDE9FE", lightText: "#5B21B6" },
-  { bg: "#F97316", border: "#EA580C", light: "#FFEDD5", lightText: "#C2410C" },
-  { bg: "#F43F5E", border: "#E11D48", light: "#FFE4E6", lightText: "#9F1239" },
-  { bg: "#06B6D4", border: "#0891B2", light: "#CFFAFE", lightText: "#0E7490" },
-  { bg: "#F59E0B", border: "#D97706", light: "#FEF3C7", lightText: "#B45309" },
-] as const;
+// 表示色はカテゴリの色(categoryColor)を優先し、カテゴリ未設定のタスクだけ
+// タスク自身のcolor(AddTaskScreenのColorPickerで選択された値、常に非空)を使う。
+// 以前はカテゴリ名のハッシュから固定パレット(BAR_PALETTE)を割り当てていたが、
+// item.colorが常に埋まる仕様になったことで`??`によるフォールバックが機能しなくなり、
+// カテゴリごとの色分けが事実上死んでいた。カテゴリ自体が色を持つようになった今は
+// そのcategoryColorを直接使うのが正しい。
+function resolveDisplayColor(item: SavedItem): string {
+  return item.categoryColor ?? item.color;
+}
 
 const BAR_H = 22;
 const BAR_PITCH = 26;
@@ -139,13 +134,6 @@ function parsePointDate(value?: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function hashColorIdx(key: string | undefined): number {
-  if (!key) return 0;
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xffffffff;
-  return Math.abs(h) % BAR_PALETTE.length;
-}
-
 interface RangeBarEntry {
   item: SavedItem;
   startCol: number;
@@ -154,7 +142,6 @@ interface RangeBarEntry {
   continuesRight: boolean;
   isWeekday: boolean;
   lane: number;
-  colorIdx: number;
 }
 
 function assignLanes(entries: Omit<RangeBarEntry, "lane">[]): RangeBarEntry[] {
@@ -171,7 +158,6 @@ function getRangeBarsForWeek(
   rangeItems: SavedItem[],
   weekdayItems: SavedItem[],
   week: Date[],
-  colorMap: Map<string | undefined, number>,
 ): RangeBarEntry[] {
   const weekStart = startOfDay(week[0]);
   const weekEnd = startOfDay(week[6]);
@@ -197,7 +183,6 @@ function getRangeBarsForWeek(
       continuesLeft: itemStart < weekStart,
       continuesRight: itemEnd > weekEnd,
       isWeekday: false,
-      colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
     });
   }
 
@@ -224,7 +209,6 @@ function getRangeBarsForWeek(
         continuesLeft: false,
         continuesRight: false,
         isWeekday: true,
-        colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
       });
 
       startCol = currentCol;
@@ -239,7 +223,6 @@ function getRangeBarsForWeek(
         continuesLeft: false,
         continuesRight: false,
         isWeekday: true,
-        colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
       });
     }
   }
@@ -279,19 +262,13 @@ const CalendarScreen = () => {
     }, [loadItems]),
   );
 
-  const { rangeItems, weekdayItems, weekdayBarItems, pointItemsByDate, categoryColorMap } = useMemo(() => {
+  const { rangeItems, weekdayItems, weekdayBarItems, pointItemsByDate } = useMemo(() => {
     const range: SavedItem[] = [];
     const weekday: SavedItem[] = [];
     const weekdayBarMap = new Map<string, { item: SavedItem; weekdays: Set<number> }>();
     const point = new Map<string, SavedItem[]>();
-    const colorMap = new Map<string | undefined, number>();
-    let colorIdx = 0;
 
     for (const item of items) {
-      if (item.categoryName && !colorMap.has(item.categoryName)) {
-        colorMap.set(item.categoryName, colorIdx++ % BAR_PALETTE.length);
-      }
-
       const itemWeekdays = parseWeekdays(item.weekdays);
       if (itemWeekdays.length > 0) {
         weekday.push(item);
@@ -334,7 +311,6 @@ const CalendarScreen = () => {
         weekdays: JSON.stringify([...weekdays].sort((left, right) => left - right)),
       })),
       pointItemsByDate: point,
-      categoryColorMap: colorMap,
     };
   }, [items]);
 
@@ -418,7 +394,7 @@ const CalendarScreen = () => {
 
           <View style={styles.calendarBody}>
             {monthGrid.map((week, weekIndex) => {
-              const bars = getRangeBarsForWeek(rangeItems, weekdayBarItems, week, categoryColorMap);
+              const bars = getRangeBarsForWeek(rangeItems, weekdayBarItems, week);
               const laneCount = bars.length > 0 ? Math.max(...bars.map((b) => b.lane)) + 1 : 0;
 
               return (
@@ -467,7 +443,7 @@ const CalendarScreen = () => {
                   {laneCount > 0 && (
                     <View style={[localStyles.barContainer, { height: laneCount * BAR_PITCH + 4 }]}>
                       {bars.map((bar) => {
-                        const palette = BAR_PALETTE[bar.colorIdx];
+                        const taskColor = resolveDisplayColor(bar.item);
                         const span = bar.endCol - bar.startCol + 1;
                         const padL = bar.continuesLeft ? 0 : 3;
                         const padR = bar.continuesRight ? 0 : 3;
@@ -489,9 +465,9 @@ const CalendarScreen = () => {
                                 height: BAR_H,
                                 marginLeft: padL,
                                 marginRight: padR,
-                                backgroundColor: bar.isWeekday ? `${palette.bg}22` : palette.bg,
+                                backgroundColor: bar.isWeekday ? `${taskColor}22` : taskColor,
                                 borderWidth: bar.isWeekday ? 1.5 : 0,
-                                borderColor: bar.isWeekday ? palette.bg : "transparent",
+                                borderColor: bar.isWeekday ? taskColor : "transparent",
                                 borderStyle: bar.isWeekday ? "dashed" : "solid",
                                 borderTopLeftRadius: rL,
                                 borderBottomLeftRadius: rL,
@@ -507,7 +483,7 @@ const CalendarScreen = () => {
                                     localStyles.ganttBarDot,
                                     {
                                       backgroundColor: bar.isWeekday
-                                        ? palette.bg
+                                        ? taskColor
                                         : "rgba(255,255,255,0.7)",
                                     },
                                   ]}
@@ -515,7 +491,7 @@ const CalendarScreen = () => {
                                 <Text
                                   style={[
                                     localStyles.ganttBarText,
-                                    { color: bar.isWeekday ? palette.bg : "#ffffff" },
+                                    { color: bar.isWeekday ? taskColor : "#ffffff" },
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -560,20 +536,24 @@ const CalendarScreen = () => {
               </View>
             ) : (
               selectedItems.map((item) => {
-                const colorIdx = categoryColorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName);
-                const color = BAR_PALETTE[colorIdx];
+                const taskColor = resolveDisplayColor(item);
                 const isRange = isMultiDayRange(item);
 
                 return (
                   <View key={item.id} style={styles.scheduleCard}>
-                    <View style={[styles.scheduleCardAccent, { backgroundColor: color.bg }]} />
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
                     <View style={styles.scheduleRow}>
-                      <Text style={[styles.scheduleTime, { color: color.bg }]}>
+                      <Text style={[styles.scheduleTime, { color: taskColor }]}>
                         {formatScheduleTime(item)}
                       </Text>
                       {item.categoryName ? (
-                        <View style={[styles.categoryBadge, { backgroundColor: color.light }]}>
-                          <Text style={[styles.categoryBadgeText, { color: color.lightText }]}>
+                        <View
+                          style={[
+                            styles.categoryBadge,
+                            { backgroundColor: `${taskColor}22` },
+                          ]}
+                        >
+                          <Text style={[styles.categoryBadgeText, { color: taskColor }]}>
                             {item.categoryName}
                           </Text>
                         </View>

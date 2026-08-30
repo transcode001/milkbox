@@ -167,6 +167,10 @@ export const styles = StyleSheet.create({
     minHeight: 180,
     textAlignVertical: "top",
   },
+  colorPickerContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
   submitButton: {
     // 画面内の他の青いボタン群と区別できるよう、送信の確定操作だけは専用色を使う。
     backgroundColor: colors.success,
@@ -220,6 +224,11 @@ export const styles = StyleSheet.create({
   modalWeekdayGroup: {
     width: "100%",
     marginBottom: 4,
+  },
+  modalColorPicker: {
+    width: "100%",
+    marginTop: 4,
+    marginBottom: 16,
   },
   modalButtons: {
     flexDirection: "row",

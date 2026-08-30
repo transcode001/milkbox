@@ -21,6 +21,8 @@ import { parseWeekdays, WEEKDAY_LABELS } from "../utils/weekdays";
 import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 import { SelectModal, type SelectOption } from "../components/SelectModal";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
+import { ColorPicker } from "../components/ColorPicker";
+import { DEFAULT_COLORS } from "../constants/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
 const DEFAULT_CATEGORY_WEEKDAYS = [1, 2, 3, 4, 5];
@@ -37,10 +39,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
     noCategoryChecked,
     showAddCategoryModal,
     newCategoryName,
+    newCategoryColor,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
     setNewCategoryName,
+    setNewCategoryColor,
     loadCategories,
     handleAddCategory,
     handleUpdateCategory,
@@ -62,6 +66,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     formatTime,
   } = useDatePicker();
   const [text, setText] = useState("");
+  const [taskColor, setTaskColor] = useState<string>(DEFAULT_COLORS.task);
   const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -73,6 +78,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     id: number;
     name: string;
     weekdays: number[];
+    color: string;
   } | null>(null);
   const lastReminderMinutesRef = useRef(DEFAULT_REMINDER_MINUTES);
 
@@ -84,9 +90,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
   }, []);
   const closeAddCategoryModal = useCallback(() => {
     setNewCategoryName("");
+    setNewCategoryColor(DEFAULT_COLORS.category);
     setNewCategoryWeekdays(DEFAULT_CATEGORY_WEEKDAYS);
     setShowAddCategoryModal(false);
-  }, [setNewCategoryName, setShowAddCategoryModal]);
+  }, [setNewCategoryColor, setNewCategoryName, setShowAddCategoryModal]);
 
   const inheritedWeekdays = useMemo(
     () => parseWeekdays(categories.find((category) => category.id.toString() === selectedOption)?.weekdays),
@@ -141,6 +148,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       id: category.id,
       name: category.name,
       weekdays: parseWeekdays(category.weekdays),
+      color: category.color,
     });
   };
 
@@ -150,6 +158,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       editingCategory.id,
       editingCategory.name,
       editingCategory.weekdays,
+      editingCategory.color,
     );
     if (updated) {
       setEditingCategory(null);
@@ -209,9 +218,11 @@ const AddTaskScreen = ({ navigation }: Props) => {
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled,
         notificationMinutesBefore,
+        color: taskColor,
       });
 
       setText("");
+      setTaskColor(DEFAULT_COLORS.task);
       clearDate("start");
       clearDate("end");
       setNotificationMinutesBefore(DEFAULT_REMINDER_MINUTES);
@@ -300,6 +311,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
                 onToggleWeekday={toggleNewCategoryWeekday}
               />
             </View>
+            <Text style={styles.modalFieldLabel}>色</Text>
+            <View style={styles.modalColorPicker}>
+              <ColorPicker
+                value={newCategoryColor}
+                defaultColor={DEFAULT_COLORS.category}
+                onChange={setNewCategoryColor}
+              />
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -326,10 +345,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
         visible={editingCategory !== null}
         name={editingCategory?.name ?? ""}
         weekdays={editingCategory?.weekdays ?? []}
+        color={editingCategory?.color ?? DEFAULT_COLORS.category}
         onChangeName={(name) => {
           setEditingCategory((current) => current ? { ...current, name } : current);
         }}
         onToggleWeekday={toggleEditingCategoryWeekday}
+        onChangeColor={(color) => {
+          setEditingCategory((current) => current ? { ...current, color } : current);
+        }}
         onCancel={() => setEditingCategory(null)}
         onSave={() => void submitCategoryUpdate()}
       />
@@ -442,6 +465,15 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     blurOnSubmit={true}
                     onSubmitEditing={Keyboard.dismiss}
                   />
+
+                  <View style={styles.colorPickerContainer}>
+                    <Text style={styles.dateLabel}>タスクの色</Text>
+                    <ColorPicker
+                      value={taskColor}
+                      defaultColor={DEFAULT_COLORS.task}
+                      onChange={setTaskColor}
+                    />
+                  </View>
 
                   <View style={styles.dateRow}>
                     <View>

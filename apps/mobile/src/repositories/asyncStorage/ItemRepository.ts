@@ -1,5 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DEFAULT_REMINDER_MINUTES, IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_COLORS } from '../../constants/colors';
+
+const DEFAULT_TASK_COLOR = DEFAULT_COLORS.task;
 
 type StoredItem = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
   notificationEnabled?: boolean | number;
@@ -18,6 +21,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
     const items: StoredItem[] = jsonValue ? JSON.parse(jsonValue) : [];
     return items.map((item) => ({
       ...item,
+      color: item.color ?? DEFAULT_TASK_COLOR,
       notificationEnabled:
         item.notificationEnabled !== false && item.notificationEnabled !== 0,
       notificationMinutesBefore: item.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
@@ -39,6 +43,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       startDate: data.startDate,
       endDate: data.endDate,
       weekdays: data.weekdays,
+      color: data.color ?? DEFAULT_TASK_COLOR,
       notificationEnabled: data.notificationEnabled !== false,
       notificationMinutesBefore: data.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
     };
@@ -59,6 +64,9 @@ export class AsyncStorageItemRepository implements IItemRepository {
       }
       if (data.notificationMinutesBefore !== undefined) {
         items[index].notificationMinutesBefore = data.notificationMinutesBefore;
+      }
+      if (data.color !== undefined) {
+        items[index].color = data.color;
       }
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     }
