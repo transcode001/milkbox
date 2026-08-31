@@ -23,7 +23,7 @@ export interface UseDatePickerResult {
   formatDateTime: (date: Date) => string;
 }
 
-const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
+export const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
   const base = current ?? new Date();
   return new Date(
     selectedDate.getFullYear(),
@@ -36,7 +36,7 @@ const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
   );
 };
 
-const mergeTimePart = (current: Date | null, selectedDate: Date): Date => {
+export const mergeTimePart = (current: Date | null, selectedDate: Date): Date => {
   const base = current ?? new Date();
   return new Date(
     base.getFullYear(),

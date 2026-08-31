@@ -16,7 +16,10 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radii, spacing } from "../styles/tokens";
 import { modalStyles } from "../styles/modalStyles";
 import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -34,6 +37,7 @@ import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { DEFAULT_COLORS } from "../constants/colors";
+import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
@@ -222,18 +226,59 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
+  // iOS: mode="datetime" の spinner は宣言的な<DateTimePicker>のままで問題ないため据え置き。
+  // 操作中に onChange が連続発火するため、自動では閉じず既存の「閉じる」ボタンに任せる。
   const handleItemDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    // mode="datetime" は iOS では spinner 表示になり、操作中に onChange が
-    // 連続発火するため、iOS では自動で閉じず既存の「閉じる」ボタンに任せる。
-    if (Platform.OS !== "ios") {
-      setShowItemDatePicker(null);
-    }
     if (!selectedDate || !showItemDatePicker) return;
 
     if (showItemDatePicker === "start") {
       setEditItemStartDate(selectedDate);
     } else {
       setEditItemEndDate(selectedDate);
+    }
+  };
+
+  // Android: 宣言的な<DateTimePicker>をこの編集モーダル(RNのModalコンポーネント)の中に
+  // マウントすると、Modal自体が別ウィンドウのDialogとして描画されるAndroid上で、
+  // ネイティブのDatePickerDialog(FragmentベースでActivityのFragmentManagerを使う)と
+  // 競合してクラッシュすることがある。また"datetime"はAndroidでは無効なmodeで、
+  // 実際には日付のみのダイアログに縮退してしまい時刻編集ができていなかった。
+  // そのためAndroidだけは、Viewツリーに一切コンポーネントをマウントしない命令的API
+  // (DateTimePickerAndroid.open)を使い、日付→時刻の順に2段階でダイアログを出す。
+  const openAndroidItemDateTimePicker = (field: "start" | "end") => {
+    const base = (field === "start" ? editItemStartDate : editItemEndDate) ?? new Date();
+
+    DateTimePickerAndroid.open({
+      value: base,
+      mode: "date",
+      onChange: (dateEvent, selectedDate) => {
+        if (dateEvent.type !== "set" || !selectedDate) return;
+        const mergedDate = mergeDatePart(base, selectedDate);
+
+        DateTimePickerAndroid.open({
+          value: mergedDate,
+          mode: "time",
+          is24Hour: true,
+          onChange: (timeEvent, selectedTime) => {
+            if (timeEvent.type !== "set" || !selectedTime) return;
+            const finalDate = mergeTimePart(mergedDate, selectedTime);
+
+            if (field === "start") {
+              setEditItemStartDate(finalDate);
+            } else {
+              setEditItemEndDate(finalDate);
+            }
+          },
+        });
+      },
+    });
+  };
+
+  const openItemDateTimePicker = (field: "start" | "end") => {
+    if (Platform.OS === "android") {
+      openAndroidItemDateTimePicker(field);
+    } else {
+      setShowItemDatePicker(field);
     }
   };
 
@@ -318,7 +363,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 <Text style={styles.fieldLabel}>開始日時</Text>
                 <TouchableOpacity
                   style={styles.dateSelectorButton}
-                  onPress={() => setShowItemDatePicker("start")}
+                  onPress={() => openItemDateTimePicker("start")}
                 >
                   <Text style={styles.dateSelectorButtonText}>
                     {editItemStartDate ? formatItemDateTime(editItemStartDate.toISOString()) : "未設定"}
@@ -329,7 +374,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 <Text style={styles.fieldLabel}>終了日時</Text>
                 <TouchableOpacity
                   style={styles.dateSelectorButton}
-                  onPress={() => setShowItemDatePicker("end")}
+                  onPress={() => openItemDateTimePicker("end")}
                 >
                   <Text style={styles.dateSelectorButtonText}>
                     {editItemEndDate ? formatItemDateTime(editItemEndDate.toISOString()) : "未設定"}
@@ -337,7 +382,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 </TouchableOpacity>
               </View>
             </View>
-            {showItemDatePicker && (
+            {Platform.OS === "ios" && showItemDatePicker && (
               <View style={styles.datePickerPanel}>
                 <DateTimePicker
                   value={
@@ -347,18 +392,16 @@ const HomeScreen = ({ navigation }: Props) => {
                   }
                   mode="datetime"
                   is24Hour={true}
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  display="spinner"
                   onChange={handleItemDateChange}
                   locale="ja-JP"
                 />
-                {Platform.OS === "ios" && (
-                  <TouchableOpacity
-                    style={styles.datePickerCloseButton}
-                    onPress={() => setShowItemDatePicker(null)}
-                  >
-                    <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.datePickerCloseButton}
+                  onPress={() => setShowItemDatePicker(null)}
+                >
+                  <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
+                </TouchableOpacity>
               </View>
             )}
             <View style={styles.modalButtons}>
