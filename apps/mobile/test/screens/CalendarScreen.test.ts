@@ -1,5 +1,9 @@
 import type { SavedItem } from "@milkbox/shared";
-import { formatScheduleTime, formatTimeOfDay } from "../../src/screens/CalendarScreen";
+import {
+  formatScheduleTime,
+  formatTimeOfDay,
+  groupScheduleItems,
+} from "../../src/screens/CalendarScreen";
 
 const baseItem: SavedItem = {
   color: "#7986CB",
@@ -67,5 +71,29 @@ describe("formatScheduleTime", () => {
     const item: SavedItem = { ...baseItem, date: "2026-01-06" };
 
     expect(formatScheduleTime(item)).toBe("終日");
+  });
+});
+
+describe("groupScheduleItems", () => {
+  it("groups tasks by category and orders tasks by time", () => {
+    const result = groupScheduleItems([
+      { ...baseItem, id: 1, categoryId: 10, categoryName: "仕事", startDate: "2026-01-06T11:00:00" },
+      { ...baseItem, id: 2, categoryId: 20, categoryName: "個人", startDate: "2026-01-06T10:00:00" },
+      { ...baseItem, id: 3, categoryId: 10, categoryName: "仕事", startDate: "2026-01-06T09:00:00" },
+    ]);
+
+    expect(result).toHaveLength(2);
+    expect(result.find((group) => group.key === "10")?.items.map((item) => item.id)).toEqual([3, 1]);
+  });
+
+  it("groups all uncategorized tasks into one category", () => {
+    const result = groupScheduleItems([
+      { ...baseItem, id: 1 },
+      { ...baseItem, id: 2 },
+    ]);
+
+    expect(result).toHaveLength(1);
+    expect(result[0].categoryName).toBe("カテゴリ指定なし");
+    expect(result[0].items.map((item) => item.id)).toEqual([1, 2]);
   });
 });

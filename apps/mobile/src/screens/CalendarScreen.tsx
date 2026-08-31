@@ -113,6 +113,42 @@ export function formatScheduleTime(item: SavedItem): string {
   return formatTimeOfDay(item.date) ?? "終日";
 }
 
+export type ScheduleCategoryGroup = {
+  key: string;
+  categoryName: string;
+  items: SavedItem[];
+};
+
+const UNCATEGORIZED_KEY = "__uncategorized__";
+const UNCATEGORIZED_LABEL = "カテゴリ指定なし";
+
+const getScheduleTimeValue = (item: SavedItem): number =>
+  parsePointDate(item.startDate ?? item.endDate ?? item.date)?.getTime() ?? 0;
+
+export function groupScheduleItems(items: SavedItem[]): ScheduleCategoryGroup[] {
+  const groups = new Map<string, ScheduleCategoryGroup>();
+
+  for (const item of [...items].sort((left, right) => getScheduleTimeValue(left) - getScheduleTimeValue(right))) {
+    const key = item.categoryId != null ? String(item.categoryId) : UNCATEGORIZED_KEY;
+    const existing = groups.get(key);
+
+    if (existing) {
+      existing.items.push(item);
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      categoryName: item.categoryId != null
+        ? (item.categoryName ?? "")
+        : UNCATEGORIZED_LABEL,
+      items: [item],
+    });
+  }
+
+  return Array.from(groups.values());
+}
+
 function isMultiDayRange(item: SavedItem): boolean {
   if (!item.startDate || !item.endDate) return false;
   const s = parseItemDate(item.startDate);
@@ -335,12 +371,11 @@ const CalendarScreen = () => {
 
     result.push(...(pointItemsByDate.get(selectedDateKey) ?? []));
 
-    return result.sort((left, right) => {
-      const leftTime = parsePointDate(left.startDate ?? left.endDate ?? left.date)?.getTime() ?? 0;
-      const rightTime = parsePointDate(right.startDate ?? right.endDate ?? right.date)?.getTime() ?? 0;
-      return leftTime - rightTime;
-    });
+    // 時刻順の並べ替えはgroupScheduleItems()が同じgetScheduleTimeValue()で
+    // 必ず行うため、ここでは行わない(二重ソート・二重の日付パースを避ける)。
+    return result;
   }, [rangeItems, weekdayItems, pointItemsByDate, selectedDate, selectedDateKey]);
+  const selectedItemGroups = useMemo(() => groupScheduleItems(selectedItems), [selectedItems]);
 
   const moveMonth = useCallback((diff: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
@@ -535,38 +570,80 @@ const CalendarScreen = () => {
                 <Text style={styles.emptyText}>AddTask で登録したタスクがここに表示されます。</Text>
               </View>
             ) : (
-              selectedItems.map((item) => {
-                const taskColor = resolveDisplayColor(item);
-                const isRange = isMultiDayRange(item);
+              selectedItemGroups.flatMap((group) => {
+                // 「カテゴリ指定なし」はitem.categoryColorを持たず各タスクが個別に
+                // 色を選んでいるため、1枚のカードに束ねて代表色を使うと他のタスクの
+                // 色が無視されてしまう。この場合だけグループ化前と同じ1タスク=1カード
+                // (各カードが自分自身のcolorでアクセントバーを出す)に戻す。
+                if (group.key === UNCATEGORIZED_KEY) {
+                  return group.items.map((item) => {
+                    const taskColor = resolveDisplayColor(item);
+                    const isRange = isMultiDayRange(item);
 
-                return (
-                  <View key={item.id} style={styles.scheduleCard}>
-                    <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
-                    <View style={styles.scheduleRow}>
-                      <Text style={[styles.scheduleTime, { color: taskColor }]}>
-                        {formatScheduleTime(item)}
+                    return (
+                      <View key={item.id} style={styles.scheduleCard}>
+                        <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
+                        <View style={styles.scheduleTaskRow}>
+                          <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                            {formatScheduleTime(item)}
+                          </Text>
+                          <Text style={styles.scheduleText}>{item.text}</Text>
+                        </View>
+                        {isRange && item.startDate && item.endDate ? (
+                          <Text style={localStyles.rangeDateText}>
+                            {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  });
+                }
+
+                // 実カテゴリのグループは全アイテムが同じcategoryColorを共有するため、
+                // 先頭アイテムから読んでも代表色として問題ない。
+                const groupColor = resolveDisplayColor(group.items[0]);
+
+                return [
+                  <View key={group.key} style={styles.scheduleCard}>
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: groupColor }]} />
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: `${groupColor}22` },
+                      ]}
+                    >
+                      <Text style={[styles.categoryBadgeText, { color: groupColor }]}>
+                        {group.categoryName}
                       </Text>
-                      {item.categoryName ? (
+                    </View>
+                    {group.items.map((item, index) => {
+                      const taskColor = resolveDisplayColor(item);
+                      const isRange = isMultiDayRange(item);
+
+                      return (
                         <View
+                          key={item.id}
                           style={[
-                            styles.categoryBadge,
-                            { backgroundColor: `${taskColor}22` },
+                            styles.scheduleTask,
+                            index > 0 && styles.scheduleTaskDivider,
                           ]}
                         >
-                          <Text style={[styles.categoryBadgeText, { color: taskColor }]}>
-                            {item.categoryName}
-                          </Text>
+                          <View style={styles.scheduleTaskRow}>
+                            <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                              {formatScheduleTime(item)}
+                            </Text>
+                            <Text style={styles.scheduleText}>{item.text}</Text>
+                          </View>
+                          {isRange && item.startDate && item.endDate ? (
+                            <Text style={localStyles.rangeDateText}>
+                              {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
+                            </Text>
+                          ) : null}
                         </View>
-                      ) : null}
-                    </View>
-                    <Text style={styles.scheduleText}>{item.text}</Text>
-                    {isRange && item.startDate && item.endDate ? (
-                      <Text style={localStyles.rangeDateText}>
-                        {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
-                      </Text>
-                    ) : null}
-                  </View>
-                );
+                      );
+                    })}
+                  </View>,
+                ];
               })
             )}
           </View>

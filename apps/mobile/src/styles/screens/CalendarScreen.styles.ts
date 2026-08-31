@@ -173,18 +173,26 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
   },
-  scheduleRow: {
+  scheduleTask: {
+    paddingVertical: 10,
+  },
+  scheduleTaskDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#D8DAE2",
+  },
+  scheduleTaskRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    gap: 12,
   },
   scheduleTime: {
+    width: 110,
     fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
   },
   categoryBadge: {
+    alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
@@ -196,6 +204,7 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   scheduleText: {
+    flex: 1,
     fontSize: 15,
     color: colors.textPrimary,
     lineHeight: 22,
