@@ -3,6 +3,7 @@ import {
   formatScheduleTime,
   formatTimeOfDay,
   groupScheduleItems,
+  sortScheduleItemsByTime,
 } from "../../src/screens/CalendarScreen";
 
 const baseItem: SavedItem = {
@@ -95,5 +96,29 @@ describe("groupScheduleItems", () => {
     expect(result).toHaveLength(1);
     expect(result[0].categoryName).toBe("カテゴリ指定なし");
     expect(result[0].items.map((item) => item.id)).toEqual([1, 2]);
+  });
+});
+
+describe("sortScheduleItemsByTime", () => {
+  it("orders tasks across categories by time without mutating the input", () => {
+    const items = [
+      { ...baseItem, id: 1, categoryId: 10, startDate: "2026-01-06T15:00:00" },
+      { ...baseItem, id: 2, categoryId: 20, startDate: "2026-01-06T09:00:00" },
+      { ...baseItem, id: 3, startDate: "2026-01-06T12:00:00" },
+    ];
+
+    expect(sortScheduleItemsByTime(items).map((item) => item.id)).toEqual([2, 3, 1]);
+    expect(items.map((item) => item.id)).toEqual([1, 2, 3]);
+  });
+
+  it("sorts weekday-repeating items first, ignoring their date's incidental creation time", () => {
+    const items = [
+      { ...baseItem, id: 1, startDate: "2026-01-06T08:00:00" },
+      // date holds a late creation timestamp that must NOT be used as a sort key
+      { ...baseItem, id: 2, date: "2026-01-06T23:30:00", weekdays: JSON.stringify([1, 3, 5]) },
+      { ...baseItem, id: 3, startDate: "2026-01-06T20:00:00" },
+    ];
+
+    expect(sortScheduleItemsByTime(items).map((item) => item.id)).toEqual([2, 1, 3]);
   });
 });

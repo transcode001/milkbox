@@ -122,13 +122,22 @@ export type ScheduleCategoryGroup = {
 const UNCATEGORIZED_KEY = "__uncategorized__";
 const UNCATEGORIZED_LABEL = "カテゴリ指定なし";
 
-const getScheduleTimeValue = (item: SavedItem): number =>
-  parsePointDate(item.startDate ?? item.endDate ?? item.date)?.getTime() ?? 0;
+const getScheduleTimeValue = (item: SavedItem): number => {
+  // 曜日繰り返しタスクのdateは実際の発生時刻ではなく作成時刻(formatScheduleTime
+  // 参照)なので、それをソートキーに使うと無関係な時刻順になってしまう。
+  // 終日イベント扱いとして常に先頭に来るよう -Infinity を返す。
+  if (parseWeekdays(item.weekdays).length > 0) return -Infinity;
+  return parsePointDate(item.startDate ?? item.endDate ?? item.date)?.getTime() ?? 0;
+};
+
+export function sortScheduleItemsByTime(items: SavedItem[]): SavedItem[] {
+  return [...items].sort((left, right) => getScheduleTimeValue(left) - getScheduleTimeValue(right));
+}
 
 export function groupScheduleItems(items: SavedItem[]): ScheduleCategoryGroup[] {
   const groups = new Map<string, ScheduleCategoryGroup>();
 
-  for (const item of [...items].sort((left, right) => getScheduleTimeValue(left) - getScheduleTimeValue(right))) {
+  for (const item of sortScheduleItemsByTime(items)) {
     const key = item.categoryId != null ? String(item.categoryId) : UNCATEGORIZED_KEY;
     const existing = groups.get(key);
 
@@ -270,6 +279,7 @@ function getRangeBarsForWeek(
 const CalendarScreen = () => {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
+  const [scheduleDisplayMode, setScheduleDisplayMode] = useState<"category" | "time">("category");
   const [items, setItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -375,7 +385,16 @@ const CalendarScreen = () => {
     // 必ず行うため、ここでは行わない(二重ソート・二重の日付パースを避ける)。
     return result;
   }, [rangeItems, weekdayItems, pointItemsByDate, selectedDate, selectedDateKey]);
-  const selectedItemGroups = useMemo(() => groupScheduleItems(selectedItems), [selectedItems]);
+  // 表示モードで使う方だけ計算する(どちらもO(n log n)のソートを含むため、
+  // 非表示側まで毎回計算するのは無駄)。
+  const selectedItemGroups = useMemo(
+    () => (scheduleDisplayMode === "category" ? groupScheduleItems(selectedItems) : []),
+    [scheduleDisplayMode, selectedItems],
+  );
+  const selectedItemsByTime = useMemo(
+    () => (scheduleDisplayMode === "time" ? sortScheduleItemsByTime(selectedItems) : []),
+    [scheduleDisplayMode, selectedItems],
+  );
 
   const moveMonth = useCallback((diff: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
@@ -563,13 +582,40 @@ const CalendarScreen = () => {
             </Pressable>
           </View>
 
+          <View style={styles.scheduleDisplayToggle} accessibilityRole="radiogroup">
+            {(["category", "time"] as const).map((mode) => {
+              const selected = scheduleDisplayMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  style={[
+                    styles.scheduleDisplayToggleButton,
+                    selected && styles.scheduleDisplayToggleButtonSelected,
+                  ]}
+                  onPress={() => setScheduleDisplayMode(mode)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={[
+                      styles.scheduleDisplayToggleText,
+                      selected && styles.scheduleDisplayToggleTextSelected,
+                    ]}
+                  >
+                    {mode === "category" ? "カテゴリ" : "時間順"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={styles.scheduleList}>
             {selectedItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>予定はありません</Text>
                 <Text style={styles.emptyText}>AddTask で登録したタスクがここに表示されます。</Text>
               </View>
-            ) : (
+            ) : scheduleDisplayMode === "category" ? (
               selectedItemGroups.flatMap((group) => {
                 // 「カテゴリ指定なし」はitem.categoryColorを持たず各タスクが個別に
                 // 色を選んでいるため、1枚のカードに束ねて代表色を使うと他のタスクの
@@ -644,6 +690,39 @@ const CalendarScreen = () => {
                     })}
                   </View>,
                 ];
+              })
+            ) : (
+              selectedItemsByTime.map((item) => {
+                const taskColor = resolveDisplayColor(item);
+                const isRange = isMultiDayRange(item);
+
+                return (
+                  <View key={item.id} style={styles.scheduleCard}>
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
+                    <View style={styles.scheduleTaskRow}>
+                      <View style={styles.chronologicalTaskContent}>
+                        <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                          {formatScheduleTime(item)}
+                        </Text>
+                        <Text style={styles.scheduleText}>{item.text}</Text>
+                        {isRange && item.startDate && item.endDate ? (
+                          <Text style={localStyles.rangeDateText}>
+                            {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={styles.chronologicalCategoryColumn}>
+                        <Text
+                          style={[styles.chronologicalCategoryText, { color: taskColor }]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {item.categoryName ?? UNCATEGORIZED_LABEL}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                );
               })
             )}
           </View>
