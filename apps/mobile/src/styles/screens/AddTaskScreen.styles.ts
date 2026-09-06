@@ -203,33 +203,6 @@ export const styles = StyleSheet.create({
     marginBottom: 16,
     lineHeight: 20,
   },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: radii.md,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  modalFieldLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  modalFieldHelp: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  modalWeekdayGroup: {
-    width: "100%",
-    marginBottom: 4,
-  },
-  modalColorPicker: {
-    width: "100%",
-    marginTop: 4,
-    marginBottom: 16,
-  },
   modalButtons: {
     flexDirection: "row",
     justifyContent: "space-between",

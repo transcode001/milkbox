@@ -117,4 +117,28 @@ describe("useDatePicker", () => {
     expect(result.current.startHasDate).toBe(true);
     expect(result.current.activeDatePicker).toBeNull();
   });
+
+  it("clears only the date flag while preserving a selected time", () => {
+    const { result } = renderHook(() => useDatePicker());
+
+    act(() => {
+      result.current.openDatePicker("start", "date");
+    });
+    act(() => {
+      result.current.onDateChange(setEvent, new Date(2026, 7, 10));
+    });
+    act(() => {
+      result.current.openDatePicker("start", "time");
+    });
+    act(() => {
+      result.current.onDateChange(setEvent, new Date(2026, 7, 10, 8, 30));
+    });
+    act(() => {
+      result.current.clearDatePart("start");
+    });
+
+    expect(result.current.startDate?.getHours()).toBe(8);
+    expect(result.current.startHasDate).toBe(false);
+    expect(result.current.startHasTime).toBe(true);
+  });
 });

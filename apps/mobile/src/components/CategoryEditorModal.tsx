@@ -1,5 +1,6 @@
 import React from "react";
 import {
+  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -15,8 +16,14 @@ import { WeekdayButtonGroup } from "./WeekdayButtonGroup";
 import { ColorPicker } from "./ColorPicker";
 import { DEFAULT_COLORS } from "../constants/colors";
 
+// 新規追加(AddTaskScreenのカテゴリ追加)と既存編集(AddTaskScreen/HomeScreenの
+// カテゴリ編集)は、名前+曜日+色+ボタン2つという同じ構成のフォームだったため、
+// タイトル・プレースホルダー・送信ボタンのラベルだけ mode で出し分けて1つに統合した。
+type CategoryEditorMode = "add" | "edit";
+
 interface CategoryEditorModalProps {
   visible: boolean;
+  mode: CategoryEditorMode;
   name: string;
   weekdays: number[];
   color: string;
@@ -27,8 +34,29 @@ interface CategoryEditorModalProps {
   onSave: () => void;
 }
 
+const MODE_COPY: Record<CategoryEditorMode, {
+  title: string;
+  namePlaceholder: string;
+  saveLabel: string;
+  animationType: "slide" | "fade";
+}> = {
+  add: {
+    title: "カテゴリを追加",
+    namePlaceholder: "カテゴリ名を入力",
+    saveLabel: "追加",
+    animationType: "slide",
+  },
+  edit: {
+    title: "カテゴリを編集",
+    namePlaceholder: "カテゴリ名",
+    saveLabel: "保存",
+    animationType: "fade",
+  },
+};
+
 export const CategoryEditorModal = ({
   visible,
+  mode,
   name,
   weekdays,
   color,
@@ -37,51 +65,58 @@ export const CategoryEditorModal = ({
   onChangeColor,
   onCancel,
   onSave,
-}: CategoryEditorModalProps) => (
-  <Modal
-    visible={visible}
-    transparent={true}
-    animationType="fade"
-    onRequestClose={onCancel}
-  >
-    <KeyboardAvoidingView
-      style={styles.overlay}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+}: CategoryEditorModalProps) => {
+  const copy = MODE_COPY[mode];
+
+  return (
+    <Modal
+      visible={visible}
+      transparent={true}
+      animationType={copy.animationType}
+      onRequestClose={onCancel}
     >
-      <View style={styles.content}>
-        <Text style={styles.title}>カテゴリを編集</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={onChangeName}
-          placeholder="カテゴリ名"
-          returnKeyType="done"
-          onSubmitEditing={onSave}
-        />
-        <Text style={styles.fieldLabel}>曜日</Text>
-        <Text style={styles.helpText}>このカテゴリで繰り返す曜日を選択してください。</Text>
-        <WeekdayButtonGroup
-          selectedWeekdays={weekdays}
-          onToggleWeekday={onToggleWeekday}
-        />
-        <Text style={styles.colorLabel}>色</Text>
-        <ColorPicker
-          value={color}
-          defaultColor={DEFAULT_COLORS.category}
-          onChange={onChangeColor}
-        />
-        <View style={styles.buttons}>
-          <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel}>
-            <Text style={[styles.buttonText, modalStyles.modalButtonCancelText]}>キャンセル</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={onSave}>
-            <Text style={styles.buttonText}>保存</Text>
-          </TouchableOpacity>
+      <KeyboardAvoidingView
+        style={styles.overlay}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>{copy.title}</Text>
+          <TextInput
+            style={styles.input}
+            value={name}
+            onChangeText={onChangeName}
+            placeholder={copy.namePlaceholder}
+            returnKeyType="done"
+            onSubmitEditing={() => {
+              Keyboard.dismiss();
+              onSave();
+            }}
+          />
+          <Text style={styles.fieldLabel}>曜日</Text>
+          <Text style={styles.helpText}>このカテゴリで繰り返す曜日を選択してください。</Text>
+          <WeekdayButtonGroup
+            selectedWeekdays={weekdays}
+            onToggleWeekday={onToggleWeekday}
+          />
+          <Text style={styles.colorLabel}>色</Text>
+          <ColorPicker
+            value={color}
+            defaultColor={DEFAULT_COLORS.category}
+            onChange={onChangeColor}
+          />
+          <View style={styles.buttons}>
+            <TouchableOpacity style={[styles.button, styles.cancelButton]} onPress={onCancel}>
+              <Text style={[styles.buttonText, modalStyles.modalButtonCancelText]}>キャンセル</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.button, styles.saveButton]} onPress={onSave}>
+              <Text style={styles.buttonText}>{copy.saveLabel}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      </View>
-    </KeyboardAvoidingView>
-  </Modal>
-);
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+};
 
 const styles = StyleSheet.create({
   overlay: {

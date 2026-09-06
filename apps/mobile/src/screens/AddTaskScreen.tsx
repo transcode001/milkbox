@@ -15,10 +15,10 @@ import { useDatePicker } from "../hooks/useDatePicker";
 import {
   isEndDateBeforeStartDate,
   resolveScheduleWeekdays,
+  stripDateForTimeOnlyComparison,
   toSavedDate,
 } from "../utils/dateValidation";
 import { parseWeekdays, WEEKDAY_LABELS } from "../utils/weekdays";
-import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 import { SelectModal, type SelectOption } from "../components/SelectModal";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { ColorPicker } from "../components/ColorPicker";
@@ -62,6 +62,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     onDateChange,
     openDatePicker,
     clearDate,
+    clearDatePart,
     formatDate,
     formatTime,
   } = useDatePicker();
@@ -99,7 +100,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     () => parseWeekdays(categories.find((category) => category.id.toString() === selectedOption)?.weekdays),
     [categories, selectedOption],
   );
-  const hasSelectedDate = startHasDate || endHasDate;
+  const hasSelectedDate = noCategoryChecked && (startHasDate || endHasDate);
   const effectiveWeekdays = resolveScheduleWeekdays(hasSelectedDate, inheritedWeekdays);
   const inheritedWeekdayLabel = inheritedWeekdays.length > 0
     ? inheritedWeekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join("・")
@@ -197,7 +198,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
       return;
     }
 
-    if (isEndDateBeforeStartDate(startDate, endDate, startHasTime, endHasTime)) {
+    const validationStartDate = noCategoryChecked ? startDate : stripDateForTimeOnlyComparison(startDate);
+    const validationEndDate = noCategoryChecked ? endDate : stripDateForTimeOnlyComparison(endDate);
+
+    if (isEndDateBeforeStartDate(validationStartDate, validationEndDate, startHasTime, endHasTime)) {
       setDateError("終了日時が開始日時より前です。終了日時を再設定してください。");
       return;
     }
@@ -209,8 +213,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
       await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
-        startDate: startDate ? toSavedDate(startDate, startHasTime) : undefined,
-        endDate: endDate ? toSavedDate(endDate, endHasTime) : undefined,
+        startDate:
+          startDate && (startHasTime || (noCategoryChecked && startHasDate))
+            ? toSavedDate(startDate, startHasTime)
+            : undefined,
+        endDate:
+          endDate && (endHasTime || (noCategoryChecked && endHasDate))
+            ? toSavedDate(endDate, endHasTime)
+            : undefined,
         weekdays:
           !noCategoryChecked && effectiveWeekdays.length > 0
             ? JSON.stringify(effectiveWeekdays)
@@ -283,66 +293,22 @@ const AddTaskScreen = ({ navigation }: Props) => {
         </View>
       </Modal>
 
-      <Modal
+      <CategoryEditorModal
         visible={showAddCategoryModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={closeAddCategoryModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>カテゴリを追加</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              placeholder="カテゴリ名を入力"
-              returnKeyType="done"
-              onSubmitEditing={() => {
-                Keyboard.dismiss();
-                void submitNewCategory();
-              }}
-            />
-            <Text style={styles.modalFieldLabel}>曜日</Text>
-            <Text style={styles.modalFieldHelp}>このカテゴリで繰り返す曜日を選択してください。</Text>
-            <View style={styles.modalWeekdayGroup}>
-              <WeekdayButtonGroup
-                selectedWeekdays={newCategoryWeekdays}
-                onToggleWeekday={toggleNewCategoryWeekday}
-              />
-            </View>
-            <Text style={styles.modalFieldLabel}>色</Text>
-            <View style={styles.modalColorPicker}>
-              <ColorPicker
-                value={newCategoryColor}
-                defaultColor={DEFAULT_COLORS.category}
-                onChange={setNewCategoryColor}
-              />
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={closeAddCategoryModal}
-              >
-                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
-                  キャンセル
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit]}
-                onPress={() => {
-                  void submitNewCategory();
-                }}
-              >
-                <Text style={styles.modalButtonText}>追加</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        mode="add"
+        name={newCategoryName}
+        weekdays={newCategoryWeekdays}
+        color={newCategoryColor}
+        onChangeName={setNewCategoryName}
+        onToggleWeekday={toggleNewCategoryWeekday}
+        onChangeColor={setNewCategoryColor}
+        onCancel={closeAddCategoryModal}
+        onSave={() => void submitNewCategory()}
+      />
 
       <CategoryEditorModal
         visible={editingCategory !== null}
+        mode="edit"
         name={editingCategory?.name ?? ""}
         weekdays={editingCategory?.weekdays ?? []}
         color={editingCategory?.color ?? DEFAULT_COLORS.category}
@@ -373,13 +339,15 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setNoCategoryChecked((prev) => {
-                        const next = !prev;
-                        if (next) {
-                          closeCategoryList();
-                        }
-                        return next;
-                      });
+                      const next = !noCategoryChecked;
+                      setNoCategoryChecked(next);
+                      if (next) {
+                        closeCategoryList();
+                      } else {
+                        clearDatePart("start");
+                        clearDatePart("end");
+                        setActiveDatePicker(null);
+                      }
                       setCategoryError(null);
                       setDateError(null);
                     }}
@@ -479,14 +447,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <View>
                       <Text style={styles.dateLabel}>開始</Text>
                       <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("start", "date")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {startDate && startHasDate ? formatDate(startDate) : "日付"}
-                          </Text>
-                        </TouchableOpacity>
+                        {noCategoryChecked ? (
+                          <TouchableOpacity
+                            style={styles.dateSelectorButton}
+                            onPress={() => openDatePicker("start", "date")}
+                          >
+                            <Text style={styles.dateSelectorButtonText}>
+                              {startDate && startHasDate ? formatDate(startDate) : "日付"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.dateSelectorButton}
                           onPress={() => openDatePicker("start", "time")}
@@ -507,14 +477,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <View>
                       <Text style={styles.dateLabel}>終了</Text>
                       <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("end", "date")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {endDate && endHasDate ? formatDate(endDate) : "日付"}
-                          </Text>
-                        </TouchableOpacity>
+                        {noCategoryChecked ? (
+                          <TouchableOpacity
+                            style={styles.dateSelectorButton}
+                            onPress={() => openDatePicker("end", "date")}
+                          >
+                            <Text style={styles.dateSelectorButtonText}>
+                              {endDate && endHasDate ? formatDate(endDate) : "日付"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.dateSelectorButton}
                           onPress={() => openDatePicker("end", "time")}

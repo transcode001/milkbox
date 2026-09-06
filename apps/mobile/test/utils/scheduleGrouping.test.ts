@@ -4,7 +4,7 @@ import {
   formatTimeOfDay,
   groupScheduleItems,
   sortScheduleItemsByTime,
-} from "../../src/screens/CalendarScreen";
+} from "../../src/utils/scheduleGrouping";
 
 const baseItem: SavedItem = {
   color: "#7986CB",

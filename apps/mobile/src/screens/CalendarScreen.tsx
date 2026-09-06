@@ -10,270 +10,46 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { SavedItem } from "@milkbox/shared/repositories/types";
+import type { SavedItem } from "@milkbox/shared";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
 import { colors } from "../styles/tokens";
-
-// 表示色はカテゴリの色(categoryColor)を優先し、カテゴリ未設定のタスクだけ
-// タスク自身のcolor(AddTaskScreenのColorPickerで選択された値、常に非空)を使う。
-// 以前はカテゴリ名のハッシュから固定パレット(BAR_PALETTE)を割り当てていたが、
-// item.colorが常に埋まる仕様になったことで`??`によるフォールバックが機能しなくなり、
-// カテゴリごとの色分けが事実上死んでいた。カテゴリ自体が色を持つようになった今は
-// そのcategoryColorを直接使うのが正しい。
-function resolveDisplayColor(item: SavedItem): string {
-  return item.categoryColor ?? item.color;
-}
+import {
+  buildMonthGrid,
+  createDateKey,
+  parseItemDate,
+  parsePointDate,
+  startOfDay,
+  toDateKey,
+  formatMonthLabel,
+} from "../utils/calendarDates";
+import {
+  UNCATEGORIZED_KEY,
+  UNCATEGORIZED_LABEL,
+  formatScheduleTime,
+  groupScheduleItems,
+  isMultiDayRange,
+  resolveDisplayColor,
+  sortScheduleItemsByTime,
+} from "../utils/scheduleGrouping";
+import { getRangeBarsForWeek } from "../utils/ganttBars";
 
 const BAR_H = 22;
 const BAR_PITCH = 26;
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
+// 日曜/土曜/平日の色分けを、曜日ヘッダーと日付セルの2箇所で同じ配色を
+// 使い回すための一元化(以前は同じ3色がベタ書きで重複していた)。
+const WEEKDAY_TINT_SUNDAY = "#f87171";
+const WEEKDAY_TINT_SATURDAY = "#60a5fa";
+const WEEKDAY_TINT_WEEKDAY = "#6b7280";
 
-function createDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function toDateKey(value: string): string {
-  if (value.includes("T") || value.includes(" ")) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-  return value;
-}
-
-function parseItemDate(value?: string): Date | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return startOfDay(parsed);
-}
-
-function getCalendarStart(date: Date): Date {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  return new Date(
-    firstDayOfMonth.getFullYear(),
-    firstDayOfMonth.getMonth(),
-    firstDayOfMonth.getDate() - firstDayOfMonth.getDay(),
-  );
-}
-
-function buildMonthGrid(date: Date): Date[][] {
-  const startDate = getCalendarStart(date);
-  return Array.from({ length: 6 }, (_, weekIndex) =>
-    Array.from({ length: 7 }, (_, dayIndex) => {
-      const offset = weekIndex * 7 + dayIndex;
-      return new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate() + offset,
-      );
-    }),
-  );
-}
-
-function formatMonthLabel(date: Date): string {
-  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
-}
-
-export function formatTimeOfDay(value?: string): string | null {
-  if (!value || !value.includes("T")) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-export function formatScheduleTime(item: SavedItem): string {
-  const start = formatTimeOfDay(item.startDate);
-  const end = formatTimeOfDay(item.endDate);
-  if (start && end) return `${start} 〜 ${end}`;
-  if (start) return start;
-  if (end) return `〜 ${end}`;
-  // 曜日繰り返しタスクの date は作成時刻が入るため時間表示には使わない
-  if (parseWeekdays(item.weekdays).length > 0) return "終日";
-  return formatTimeOfDay(item.date) ?? "終日";
-}
-
-export type ScheduleCategoryGroup = {
-  key: string;
-  categoryName: string;
-  items: SavedItem[];
-};
-
-const UNCATEGORIZED_KEY = "__uncategorized__";
-const UNCATEGORIZED_LABEL = "カテゴリ指定なし";
-
-const getScheduleTimeValue = (item: SavedItem): number => {
-  // 曜日繰り返しタスクのdateは実際の発生時刻ではなく作成時刻(formatScheduleTime
-  // 参照)なので、それをソートキーに使うと無関係な時刻順になってしまう。
-  // 終日イベント扱いとして常に先頭に来るよう -Infinity を返す。
-  if (parseWeekdays(item.weekdays).length > 0) return -Infinity;
-  return parsePointDate(item.startDate ?? item.endDate ?? item.date)?.getTime() ?? 0;
-};
-
-export function sortScheduleItemsByTime(items: SavedItem[]): SavedItem[] {
-  return [...items].sort((left, right) => getScheduleTimeValue(left) - getScheduleTimeValue(right));
-}
-
-export function groupScheduleItems(items: SavedItem[]): ScheduleCategoryGroup[] {
-  const groups = new Map<string, ScheduleCategoryGroup>();
-
-  for (const item of sortScheduleItemsByTime(items)) {
-    const key = item.categoryId != null ? String(item.categoryId) : UNCATEGORIZED_KEY;
-    const existing = groups.get(key);
-
-    if (existing) {
-      existing.items.push(item);
-      continue;
-    }
-
-    groups.set(key, {
-      key,
-      categoryName: item.categoryId != null
-        ? (item.categoryName ?? "")
-        : UNCATEGORIZED_LABEL,
-      items: [item],
-    });
-  }
-
-  return Array.from(groups.values());
-}
-
-function isMultiDayRange(item: SavedItem): boolean {
-  if (!item.startDate || !item.endDate) return false;
-  const s = parseItemDate(item.startDate);
-  const e = parseItemDate(item.endDate);
-  if (!s || !e) return false;
-  return s.getTime() !== e.getTime();
-}
-
-function parsePointDate(value?: string): Date | null {
-  if (!value) return null;
-
-  if (!value.includes("T") && !value.includes(" ")) {
-    const parts = value.split("-").map(Number);
-    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-    return new Date(parts[0], parts[1] - 1, parts[2], 9, 0, 0, 0);
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-interface RangeBarEntry {
-  item: SavedItem;
-  startCol: number;
-  endCol: number;
-  continuesLeft: boolean;
-  continuesRight: boolean;
-  isWeekday: boolean;
-  lane: number;
-}
-
-function assignLanes(entries: Omit<RangeBarEntry, "lane">[]): RangeBarEntry[] {
-  const laneEnds: number[] = [];
-  return entries.map((entry) => {
-    let lane = laneEnds.findIndex((end) => end < entry.startCol);
-    if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = entry.endCol;
-    return { ...entry, lane };
-  });
-}
-
-function getRangeBarsForWeek(
-  rangeItems: SavedItem[],
-  weekdayItems: SavedItem[],
-  week: Date[],
-): RangeBarEntry[] {
-  const weekStart = startOfDay(week[0]);
-  const weekEnd = startOfDay(week[6]);
-  const entries: Omit<RangeBarEntry, "lane">[] = [];
-
-  for (const item of rangeItems) {
-    if (!item.startDate || !item.endDate) continue;
-    const itemStart = parseItemDate(item.startDate);
-    const itemEnd = parseItemDate(item.endDate);
-    if (!itemStart || !itemEnd) continue;
-    if (itemEnd < weekStart || itemStart > weekEnd) continue;
-
-    const cs = itemStart < weekStart ? weekStart : itemStart;
-    const ce = itemEnd > weekEnd ? weekEnd : itemEnd;
-    const startCol = week.findIndex((d) => createDateKey(d) === createDateKey(cs));
-    const endCol = week.findIndex((d) => createDateKey(d) === createDateKey(ce));
-    if (startCol === -1 || endCol === -1) continue;
-
-    entries.push({
-      item,
-      startCol,
-      endCol,
-      continuesLeft: itemStart < weekStart,
-      continuesRight: itemEnd > weekEnd,
-      isWeekday: false,
-    });
-  }
-
-  for (const item of weekdayItems) {
-    const weekdaySet = new Set(parseWeekdays(item.weekdays));
-    const selectedCols = week
-      .map((date, index) => (weekdaySet.has(date.getDay()) ? index : null))
-      .filter((index): index is number => index !== null);
-    if (selectedCols.length === 0) continue;
-
-    let startCol = selectedCols[0];
-    let endCol = selectedCols[0];
-
-    for (const currentCol of selectedCols.slice(1)) {
-      if (currentCol === endCol + 1) {
-        endCol = currentCol;
-        continue;
-      }
-
-      entries.push({
-        item,
-        startCol,
-        endCol,
-        continuesLeft: false,
-        continuesRight: false,
-        isWeekday: true,
-      });
-
-      startCol = currentCol;
-      endCol = currentCol;
-    }
-
-    if (startCol !== undefined && endCol !== undefined) {
-      entries.push({
-        item,
-        startCol,
-        endCol,
-        continuesLeft: false,
-        continuesRight: false,
-        isWeekday: true,
-      });
-    }
-  }
-
-  entries.sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
-  return assignLanes(entries);
+function getWeekdayTint(dayOfWeek: number): string {
+  if (dayOfWeek === 0) return WEEKDAY_TINT_SUNDAY;
+  if (dayOfWeek === 6) return WEEKDAY_TINT_SATURDAY;
+  return WEEKDAY_TINT_WEEKDAY;
 }
 
 const CalendarScreen = () => {
@@ -432,14 +208,7 @@ const CalendarScreen = () => {
           <View style={styles.weekRow}>
             {WEEKDAY_LABELS.map((label, index) => (
               <View key={label} style={styles.weekCell}>
-                <Text
-                  style={[
-                    styles.weekLabel,
-                    index === 0 && { color: "#f87171" },
-                    index === 6 && { color: "#60a5fa" },
-                    index > 0 && index < 6 && { color: "#6b7280" },
-                  ]}
-                >
+                <Text style={[styles.weekLabel, { color: getWeekdayTint(index) }]}>
                   {label}
                 </Text>
               </View>
@@ -476,8 +245,9 @@ const CalendarScreen = () => {
                               !isCurrentMonth && styles.dayNumberMuted,
                               isSelected && styles.dayNumberSelected,
                               isToday && !isSelected && styles.dayNumberToday,
-                              !isSelected && !isToday && date.getDay() === 0 && { color: "#f87171" },
-                              !isSelected && !isToday && date.getDay() === 6 && { color: "#60a5fa" },
+                              !isSelected && !isToday
+                                && (date.getDay() === 0 || date.getDay() === 6)
+                                && { color: getWeekdayTint(date.getDay()) },
                             ]}
                           >
                             {date.getDate()}
