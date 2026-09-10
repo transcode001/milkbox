@@ -107,30 +107,14 @@ export const styles = StyleSheet.create({
     color: "#666",
     fontSize: 12,
   },
+  // Figmaの更新でチェックボックス+「通知」テキストからベル型アイコン1つに
+  // 変わったため、タップ領域確保のためのpaddingだけ残しシンプルにしている。
   notificationToggle: {
     minHeight: 44,
+    minWidth: 44,
     paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  notificationCheckbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: colors.tabInactive,
-    borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.background,
-  },
-  notificationCheckboxChecked: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  notificationToggleText: {
-    fontSize: 12,
-    color: colors.textSecondary,
   },
   stateContainer: {
     flex: 1,
@@ -190,6 +174,18 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     marginBottom: 6,
+  },
+  // Figma上では「通知を設定しない」チェックボックス+テキストではなく、
+  // ベルアイコン(タップで有効/無効を切替、Homeの一覧と同じ考え方)+
+  // タイミングドロップダウンを横並びにした1行になっている。
+  notificationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+  notificationDropdown: {
+    flex: 1,
   },
   dateRow: {
     flexDirection: "row",

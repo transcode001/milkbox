@@ -1,12 +1,12 @@
 import { SavedItem } from "@milkbox/shared/repositories/types";
+// CalendarScreen側の集計(utils/scheduleGrouping.ts)と表記を必ず一致させるため、
+// ここで独自に定義せず同じ定数を再利用する。
+import { UNCATEGORIZED_KEY, UNCATEGORIZED_LABEL } from "./scheduleGrouping";
 
 export interface CategorySection {
   title: string;
   data: SavedItem[];
 }
-
-const UNCATEGORIZED_LABEL = "タスク指定なし";
-const UNCATEGORIZED_KEY = "__uncategorized__";
 
 export const groupByCategory = (items: SavedItem[]): CategorySection[] => {
   const sections = new Map<string, SavedItem[]>();

@@ -39,7 +39,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
 
   const selectedCategoryName = useMemo(() => {
     const current = categories.find((category) => category.id.toString() === selectedOption);
-    return current?.name ?? "このタスク";
+    return current?.name ?? "このカテゴリ";
   }, [categories, selectedOption]);
 
   const loadCategories = useCallback(async () => {

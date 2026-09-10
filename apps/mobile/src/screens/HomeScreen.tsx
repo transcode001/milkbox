@@ -24,25 +24,27 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  DEFAULT_REMINDER_MINUTES,
-  NONE_REMINDER_VALUE,
-  type Category,
-  type SavedItem,
-} from "@milkbox/shared";
+import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
+import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { DEFAULT_COLORS } from "../constants/colors";
 import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
+import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
   NativeStackScreenProps<RootStackParamList>
 >;
+
+// ベルアイコンで示す「通知タイミング」欄の有効時の色。#333は他の暗めの本文色
+// (dateSelectorButtonTextなど)と同じくFigma上のraw hexで、textPrimary(黒)/
+// textSecondary(#666)どちらのトークンとも一致しないためそのまま踏襲している。
+const NOTIFICATION_ENABLED_COLOR = "#333";
 
 // utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
 // あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
@@ -90,11 +92,18 @@ const HomeScreen = ({ navigation }: Props) => {
   const [showItemDatePicker, setShowItemDatePicker] = useState<
     "start" | "end" | null
   >(null);
+  const itemReminder = useReminderPicker();
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
+    // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
+    // 別要因(画面フォーカス復帰など)でのloadItems()が書き込み前の古い状態を
+    // 読み込んで上書きしてしまうのを防ぐ。書き込みが終わればtogglingNotificationRef
+    // がfalseに戻るので、その後の再読み込みは通常通り最新状態を反映できる。
+    if (togglingNotificationRef.current) return;
+
     try {
       setLoading(true);
       setErrorMessage(null);
@@ -137,21 +146,50 @@ const HomeScreen = ({ navigation }: Props) => {
     togglingNotificationRef.current = true;
 
     const enabled = !item.notificationEnabled;
+    // 無効化する時はnotificationMinutesBeforeをNONE_REMINDER_VALUEで
+    // 上書きしない(=元々設定していたタイミングをDBに残す)。そうしないと
+    // 再度有効化した際に元の値へ戻せず、常にDEFAULT_REMINDER_MINUTESへ
+    // リセットされてしまう。有効化する時だけ、その保持された値
+    // (一度も設定したことがなければDEFAULT_REMINDER_MINUTES)を使う。
     const notificationMinutesBefore = enabled
-      ? item.notificationMinutesBefore === NONE_REMINDER_VALUE
-        ? DEFAULT_REMINDER_MINUTES
-        : item.notificationMinutesBefore
-      : NONE_REMINDER_VALUE;
+      ? resolveReminderMinutesToRestore(item.notificationMinutesBefore)
+      : item.notificationMinutesBefore;
+
+    // loadItems()での全件再取得はsetLoading(true)経由でリスト全体を
+    // ActivityIndicatorに差し替えてしまい、タップのたびに画面がチラつく
+    // 原因になっていた。結果はここで分かっているので、DB更新はしつつ
+    // 画面側はローカルstateだけを直接書き換える(楽観的更新)。
+    // 失敗時のみloadItems()で正しい状態に戻す。
+    // 対象アイテムを含むセクションだけを新しいオブジェクトにし、無関係な
+    // セクションの参照はそのまま残すことでSectionListの再描画を最小限にする。
+    setSections((current) =>
+      current.map((section) => {
+        if (!section.data.some((sectionItem) => sectionItem.id === item.id)) {
+          return section;
+        }
+
+        return {
+          ...section,
+          data: section.data.map((sectionItem) =>
+            sectionItem.id === item.id
+              ? { ...sectionItem, notificationEnabled: enabled, notificationMinutesBefore }
+              : sectionItem
+          ),
+        };
+      }),
+    );
 
     try {
       setTogglingNotificationItemId(item.id);
       await dbManager.updateItem(item.id, {
         notificationEnabled: enabled,
+        // 無効化時は上のnotificationMinutesBefore計算により現状の値を
+        // そのまま送るだけで、実質DBの値は変わらない(意図的に据え置き)。
         notificationMinutesBefore,
       });
-      await loadItems();
     } catch {
       Alert.alert("エラー", "通知設定の更新に失敗しました");
+      await loadItems();
     } finally {
       togglingNotificationRef.current = false;
       setTogglingNotificationItemId(null);
@@ -174,6 +212,11 @@ const HomeScreen = ({ navigation }: Props) => {
     setEditItemStartDate(parseOptionalDate(item.startDate));
     setEditItemEndDate(parseOptionalDate(item.endDate));
     setShowItemDatePicker(null);
+    // 一覧のベルアイコン(handleToggleItemNotification)は無効化しても
+    // notificationMinutesBeforeを上書きしないため、現在は無効でも実際の値が
+    // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
+    // notificationMinutesBefore自体を見て復元用の値を決める。
+    itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
   };
 
   const toggleEditCategoryWeekday = (weekday: number) => {
@@ -213,6 +256,13 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleUpdateItem = async () => {
     if (!editingItem) return;
+
+    const trimmedText = editItemText.trim();
+    if (!trimmedText) {
+      Alert.alert("エラー", "内容を入力してください");
+      return;
+    }
+
     if (isEndDateBeforeStartDate(editItemStartDate, editItemEndDate)) {
       Alert.alert("エラー", "終了日時が開始日時より前です。終了日時を再設定してください。");
       return;
@@ -220,9 +270,13 @@ const HomeScreen = ({ navigation }: Props) => {
 
     try {
       await dbManager.updateItem(editingItem.id, {
-        text: editItemText || undefined,
+        text: trimmedText,
         startDate: editItemStartDate?.toISOString() ?? null,
         endDate: editItemEndDate?.toISOString() ?? null,
+        notificationEnabled: itemReminder.notificationEnabled,
+        // 無効で保存する場合もhandleToggleItemNotificationと同じ方針で、
+        // NONE_REMINDER_VALUEで上書きせず元のタイミングを残す。
+        notificationMinutesBefore: itemReminder.getPersistableMinutesBefore(),
       });
       setEditingItem(null);
       await loadItems();
@@ -410,6 +464,33 @@ const HomeScreen = ({ navigation }: Props) => {
                 </TouchableOpacity>
               </View>
             )}
+            <View style={styles.notificationRow}>
+              <TouchableOpacity
+                onPress={itemReminder.toggleReminderEnabled}
+                accessibilityRole="switch"
+                accessibilityLabel="通知タイミング"
+                accessibilityState={{ checked: itemReminder.notificationEnabled }}
+              >
+                <Ionicons
+                  name={itemReminder.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
+                  size={18}
+                  color={itemReminder.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
+                />
+              </TouchableOpacity>
+              <View style={styles.notificationDropdown}>
+                <SelectModal
+                  options={REMINDER_SELECT_OPTIONS}
+                  selectedValue={itemReminder.notificationMinutesBefore.toString()}
+                  selectedLabel={itemReminder.selectedReminderLabel}
+                  isOpen={itemReminder.isReminderListOpen}
+                  disabled={!itemReminder.notificationEnabled}
+                  accessibilityLabel="通知タイミングを選択"
+                  onToggle={() => itemReminder.setIsReminderListOpen((current) => !current)}
+                  onClose={() => itemReminder.setIsReminderListOpen(false)}
+                  onSelect={(value) => itemReminder.selectReminderMinutes(Number(value))}
+                />
+              </View>
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -509,6 +590,10 @@ const HomeScreen = ({ navigation }: Props) => {
                   <TouchableOpacity
                     style={styles.itemEditButton}
                     onPress={() => openItemEditor(item)}
+                    // このアイテムの通知トグルがDB書き込み中は、開いた編集モーダルの
+                    // 保存で書き込み中の値を再送してしまい、失敗時のロールバックを
+                    // 無効化しかねないため、その間だけ編集を開けないようにする。
+                    disabled={togglingNotificationItemId === item.id}
                     activeOpacity={0.8}
                   >
                     <View style={styles.itemMainRow}>
@@ -528,22 +613,18 @@ const HomeScreen = ({ navigation }: Props) => {
                     style={styles.notificationToggle}
                     onPress={() => void handleToggleItemNotification(item)}
                     disabled={togglingNotificationItemId !== null}
-                    accessibilityRole="checkbox"
+                    accessibilityRole="switch"
                     accessibilityLabel={`${item.text}の通知`}
                     accessibilityState={{
                       checked: item.notificationEnabled,
                       disabled: togglingNotificationItemId !== null,
                     }}
                   >
-                    <View style={[
-                      styles.notificationCheckbox,
-                      item.notificationEnabled && styles.notificationCheckboxChecked,
-                    ]}>
-                      {item.notificationEnabled ? (
-                        <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
-                      ) : null}
-                    </View>
-                    <Text style={styles.notificationToggleText}>通知</Text>
+                    <Ionicons
+                      name={item.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
+                      size={18}
+                      color={item.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
+                    />
                   </TouchableOpacity>
                 </View>
               </Swipeable>
