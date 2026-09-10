@@ -123,7 +123,7 @@ export default function App() {
               <Stack.Screen
                 name="AddTask"
                 component={AddTaskScreen}
-                options={{ title: "予定を追加" }}
+                options={{ title: "タスクまたはカテゴリを追加" }}
               />
               <Stack.Screen
                 name="Settings"

@@ -3,6 +3,7 @@ import { NONE_REMINDER_VALUE } from "@milkbox/shared";
 import { computeWeeklyTrigger, createReminderDate } from "../../src/services/notifications";
 
 const baseItem: SavedItem = {
+  color: "#7986CB",
   id: 1,
   text: "テストタスク",
   date: "2026-01-01T00:00:00",

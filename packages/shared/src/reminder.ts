@@ -24,3 +24,12 @@ export const REMINDER_OPTIONS: readonly ReminderOption[] = [
 
 // Google Calendarのデフォルト値(30分前)に合わせる
 export const DEFAULT_REMINDER_MINUTES = 30;
+
+// 通知を無効化する時、notificationMinutesBeforeをNONE_REMINDER_VALUEで
+// 上書きしてはいけない(再度有効化した時に元のタイミングへ戻せなくなる)。
+// 「保持していた値を復元する/初期化する」場面で共通に使う正規化ルール:
+// 一度も実タイミングを持ったことがない(NONE_REMINDER_VALUEのままの)場合だけ
+// デフォルトへフォールバックし、それ以外はそのまま使う。
+export function resolveReminderMinutesToRestore(minutesBefore: number): number {
+  return minutesBefore === NONE_REMINDER_VALUE ? DEFAULT_REMINDER_MINUTES : minutesBefore;
+}

@@ -2,7 +2,6 @@ import { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   SectionList,
   ActivityIndicator,
@@ -13,32 +12,45 @@ import {
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, radii, spacing } from "../styles/tokens";
+import { colors } from "../styles/tokens";
+import { styles } from "../styles/screens/HomeScreen.styles";
 import { modalStyles } from "../styles/modalStyles";
 import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
+import DateTimePicker, {
+  DateTimePickerAndroid,
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import {
-  DEFAULT_REMINDER_MINUTES,
-  NONE_REMINDER_VALUE,
-  type Category,
-  type SavedItem,
-} from "@milkbox/shared";
+import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
+import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { DEFAULT_COLORS } from "../constants/colors";
+import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
+import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
   NativeStackScreenProps<RootStackParamList>
 >;
 
+// ベルアイコンで示す「通知タイミング」欄の有効時の色。#333は他の暗めの本文色
+// (dateSelectorButtonTextなど)と同じくFigma上のraw hexで、textPrimary(黒)/
+// textSecondary(#666)どちらのトークンとも一致しないためそのまま踏襲している。
+const NOTIFICATION_ENABLED_COLOR = "#333";
+
+// utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
+// あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
+// といったカレンダー表示向けの正規化を行うのに対し、ここはサブタスク編集
+// フォームの初期値としてstartDate/endDateをそのままDateへ変換したいだけ
+// (時刻も保持する)ため、意図的に正規化していない。
 const parseOptionalDate = (value?: string | null): Date | null => {
   if (!value) return null;
   const date = new Date(value);
@@ -72,6 +84,7 @@ const HomeScreen = ({ navigation }: Props) => {
   } | null>(null);
   const [editCategoryName, setEditCategoryName] = useState("");
   const [editCategoryWeekdays, setEditCategoryWeekdays] = useState<number[]>([]);
+  const [editCategoryColor, setEditCategoryColor] = useState<string>(DEFAULT_COLORS.category);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
@@ -79,11 +92,18 @@ const HomeScreen = ({ navigation }: Props) => {
   const [showItemDatePicker, setShowItemDatePicker] = useState<
     "start" | "end" | null
   >(null);
+  const itemReminder = useReminderPicker();
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
 
   const loadItems = useCallback(async () => {
+    // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
+    // 別要因(画面フォーカス復帰など)でのloadItems()が書き込み前の古い状態を
+    // 読み込んで上書きしてしまうのを防ぐ。書き込みが終わればtogglingNotificationRef
+    // がfalseに戻るので、その後の再読み込みは通常通り最新状態を反映できる。
+    if (togglingNotificationRef.current) return;
+
     try {
       setLoading(true);
       setErrorMessage(null);
@@ -126,21 +146,50 @@ const HomeScreen = ({ navigation }: Props) => {
     togglingNotificationRef.current = true;
 
     const enabled = !item.notificationEnabled;
+    // 無効化する時はnotificationMinutesBeforeをNONE_REMINDER_VALUEで
+    // 上書きしない(=元々設定していたタイミングをDBに残す)。そうしないと
+    // 再度有効化した際に元の値へ戻せず、常にDEFAULT_REMINDER_MINUTESへ
+    // リセットされてしまう。有効化する時だけ、その保持された値
+    // (一度も設定したことがなければDEFAULT_REMINDER_MINUTES)を使う。
     const notificationMinutesBefore = enabled
-      ? item.notificationMinutesBefore === NONE_REMINDER_VALUE
-        ? DEFAULT_REMINDER_MINUTES
-        : item.notificationMinutesBefore
-      : NONE_REMINDER_VALUE;
+      ? resolveReminderMinutesToRestore(item.notificationMinutesBefore)
+      : item.notificationMinutesBefore;
+
+    // loadItems()での全件再取得はsetLoading(true)経由でリスト全体を
+    // ActivityIndicatorに差し替えてしまい、タップのたびに画面がチラつく
+    // 原因になっていた。結果はここで分かっているので、DB更新はしつつ
+    // 画面側はローカルstateだけを直接書き換える(楽観的更新)。
+    // 失敗時のみloadItems()で正しい状態に戻す。
+    // 対象アイテムを含むセクションだけを新しいオブジェクトにし、無関係な
+    // セクションの参照はそのまま残すことでSectionListの再描画を最小限にする。
+    setSections((current) =>
+      current.map((section) => {
+        if (!section.data.some((sectionItem) => sectionItem.id === item.id)) {
+          return section;
+        }
+
+        return {
+          ...section,
+          data: section.data.map((sectionItem) =>
+            sectionItem.id === item.id
+              ? { ...sectionItem, notificationEnabled: enabled, notificationMinutesBefore }
+              : sectionItem
+          ),
+        };
+      }),
+    );
 
     try {
       setTogglingNotificationItemId(item.id);
       await dbManager.updateItem(item.id, {
         notificationEnabled: enabled,
+        // 無効化時は上のnotificationMinutesBefore計算により現状の値を
+        // そのまま送るだけで、実質DBの値は変わらない(意図的に据え置き)。
         notificationMinutesBefore,
       });
-      await loadItems();
     } catch {
       Alert.alert("エラー", "通知設定の更新に失敗しました");
+      await loadItems();
     } finally {
       togglingNotificationRef.current = false;
       setTogglingNotificationItemId(null);
@@ -154,6 +203,7 @@ const HomeScreen = ({ navigation }: Props) => {
     });
     setEditCategoryName(category.name);
     setEditCategoryWeekdays(weekdays);
+    setEditCategoryColor(category.color);
   };
 
   const openItemEditor = (item: SavedItem) => {
@@ -162,6 +212,11 @@ const HomeScreen = ({ navigation }: Props) => {
     setEditItemStartDate(parseOptionalDate(item.startDate));
     setEditItemEndDate(parseOptionalDate(item.endDate));
     setShowItemDatePicker(null);
+    // 一覧のベルアイコン(handleToggleItemNotification)は無効化しても
+    // notificationMinutesBeforeを上書きしないため、現在は無効でも実際の値が
+    // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
+    // notificationMinutesBefore自体を見て復元用の値を決める。
+    itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
   };
 
   const toggleEditCategoryWeekday = (weekday: number) => {
@@ -187,6 +242,9 @@ const HomeScreen = ({ navigation }: Props) => {
         editCategoryWeekdays.length > 0
           ? JSON.stringify(editCategoryWeekdays)
           : null,
+        undefined,
+        undefined,
+        editCategoryColor,
       );
       setEditingCategory(null);
       await loadItems();
@@ -198,6 +256,13 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const handleUpdateItem = async () => {
     if (!editingItem) return;
+
+    const trimmedText = editItemText.trim();
+    if (!trimmedText) {
+      Alert.alert("エラー", "内容を入力してください");
+      return;
+    }
+
     if (isEndDateBeforeStartDate(editItemStartDate, editItemEndDate)) {
       Alert.alert("エラー", "終了日時が開始日時より前です。終了日時を再設定してください。");
       return;
@@ -205,9 +270,13 @@ const HomeScreen = ({ navigation }: Props) => {
 
     try {
       await dbManager.updateItem(editingItem.id, {
-        text: editItemText || undefined,
+        text: trimmedText,
         startDate: editItemStartDate?.toISOString() ?? null,
         endDate: editItemEndDate?.toISOString() ?? null,
+        notificationEnabled: itemReminder.notificationEnabled,
+        // 無効で保存する場合もhandleToggleItemNotificationと同じ方針で、
+        // NONE_REMINDER_VALUEで上書きせず元のタイミングを残す。
+        notificationMinutesBefore: itemReminder.getPersistableMinutesBefore(),
       });
       setEditingItem(null);
       await loadItems();
@@ -216,18 +285,59 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
+  // iOS: mode="datetime" の spinner は宣言的な<DateTimePicker>のままで問題ないため据え置き。
+  // 操作中に onChange が連続発火するため、自動では閉じず既存の「閉じる」ボタンに任せる。
   const handleItemDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    // mode="datetime" は iOS では spinner 表示になり、操作中に onChange が
-    // 連続発火するため、iOS では自動で閉じず既存の「閉じる」ボタンに任せる。
-    if (Platform.OS !== "ios") {
-      setShowItemDatePicker(null);
-    }
     if (!selectedDate || !showItemDatePicker) return;
 
     if (showItemDatePicker === "start") {
       setEditItemStartDate(selectedDate);
     } else {
       setEditItemEndDate(selectedDate);
+    }
+  };
+
+  // Android: 宣言的な<DateTimePicker>をこの編集モーダル(RNのModalコンポーネント)の中に
+  // マウントすると、Modal自体が別ウィンドウのDialogとして描画されるAndroid上で、
+  // ネイティブのDatePickerDialog(FragmentベースでActivityのFragmentManagerを使う)と
+  // 競合してクラッシュすることがある。また"datetime"はAndroidでは無効なmodeで、
+  // 実際には日付のみのダイアログに縮退してしまい時刻編集ができていなかった。
+  // そのためAndroidだけは、Viewツリーに一切コンポーネントをマウントしない命令的API
+  // (DateTimePickerAndroid.open)を使い、日付→時刻の順に2段階でダイアログを出す。
+  const openAndroidItemDateTimePicker = (field: "start" | "end") => {
+    const base = (field === "start" ? editItemStartDate : editItemEndDate) ?? new Date();
+
+    DateTimePickerAndroid.open({
+      value: base,
+      mode: "date",
+      onChange: (dateEvent, selectedDate) => {
+        if (dateEvent.type !== "set" || !selectedDate) return;
+        const mergedDate = mergeDatePart(base, selectedDate);
+
+        DateTimePickerAndroid.open({
+          value: mergedDate,
+          mode: "time",
+          is24Hour: true,
+          onChange: (timeEvent, selectedTime) => {
+            if (timeEvent.type !== "set" || !selectedTime) return;
+            const finalDate = mergeTimePart(mergedDate, selectedTime);
+
+            if (field === "start") {
+              setEditItemStartDate(finalDate);
+            } else {
+              setEditItemEndDate(finalDate);
+            }
+          },
+        });
+      },
+    });
+  };
+
+  const openItemDateTimePicker = (field: "start" | "end") => {
+    if (Platform.OS === "android") {
+      openAndroidItemDateTimePicker(field);
+    } else {
+      setShowItemDatePicker(field);
     }
   };
 
@@ -277,10 +387,13 @@ const HomeScreen = ({ navigation }: Props) => {
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CategoryEditorModal
         visible={editingCategory !== null}
+        mode="edit"
         name={editCategoryName}
         weekdays={editCategoryWeekdays}
+        color={editCategoryColor}
         onChangeName={setEditCategoryName}
         onToggleWeekday={toggleEditCategoryWeekday}
+        onChangeColor={setEditCategoryColor}
         onCancel={() => setEditingCategory(null)}
         onSave={() => void handleUpdateCategory()}
       />
@@ -310,7 +423,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 <Text style={styles.fieldLabel}>開始日時</Text>
                 <TouchableOpacity
                   style={styles.dateSelectorButton}
-                  onPress={() => setShowItemDatePicker("start")}
+                  onPress={() => openItemDateTimePicker("start")}
                 >
                   <Text style={styles.dateSelectorButtonText}>
                     {editItemStartDate ? formatItemDateTime(editItemStartDate.toISOString()) : "未設定"}
@@ -321,7 +434,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 <Text style={styles.fieldLabel}>終了日時</Text>
                 <TouchableOpacity
                   style={styles.dateSelectorButton}
-                  onPress={() => setShowItemDatePicker("end")}
+                  onPress={() => openItemDateTimePicker("end")}
                 >
                   <Text style={styles.dateSelectorButtonText}>
                     {editItemEndDate ? formatItemDateTime(editItemEndDate.toISOString()) : "未設定"}
@@ -329,7 +442,7 @@ const HomeScreen = ({ navigation }: Props) => {
                 </TouchableOpacity>
               </View>
             </View>
-            {showItemDatePicker && (
+            {Platform.OS === "ios" && showItemDatePicker && (
               <View style={styles.datePickerPanel}>
                 <DateTimePicker
                   value={
@@ -339,20 +452,45 @@ const HomeScreen = ({ navigation }: Props) => {
                   }
                   mode="datetime"
                   is24Hour={true}
-                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  display="spinner"
                   onChange={handleItemDateChange}
                   locale="ja-JP"
                 />
-                {Platform.OS === "ios" && (
-                  <TouchableOpacity
-                    style={styles.datePickerCloseButton}
-                    onPress={() => setShowItemDatePicker(null)}
-                  >
-                    <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={styles.datePickerCloseButton}
+                  onPress={() => setShowItemDatePicker(null)}
+                >
+                  <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
+                </TouchableOpacity>
               </View>
             )}
+            <View style={styles.notificationRow}>
+              <TouchableOpacity
+                onPress={itemReminder.toggleReminderEnabled}
+                accessibilityRole="switch"
+                accessibilityLabel="通知タイミング"
+                accessibilityState={{ checked: itemReminder.notificationEnabled }}
+              >
+                <Ionicons
+                  name={itemReminder.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
+                  size={18}
+                  color={itemReminder.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
+                />
+              </TouchableOpacity>
+              <View style={styles.notificationDropdown}>
+                <SelectModal
+                  options={REMINDER_SELECT_OPTIONS}
+                  selectedValue={itemReminder.notificationMinutesBefore.toString()}
+                  selectedLabel={itemReminder.selectedReminderLabel}
+                  isOpen={itemReminder.isReminderListOpen}
+                  disabled={!itemReminder.notificationEnabled}
+                  accessibilityLabel="通知タイミングを選択"
+                  onToggle={() => itemReminder.setIsReminderListOpen((current) => !current)}
+                  onClose={() => itemReminder.setIsReminderListOpen(false)}
+                  onSelect={(value) => itemReminder.selectReminderMinutes(Number(value))}
+                />
+              </View>
+            </View>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonCancel]}
@@ -452,9 +590,19 @@ const HomeScreen = ({ navigation }: Props) => {
                   <TouchableOpacity
                     style={styles.itemEditButton}
                     onPress={() => openItemEditor(item)}
+                    // このアイテムの通知トグルがDB書き込み中は、開いた編集モーダルの
+                    // 保存で書き込み中の値を再送してしまい、失敗時のロールバックを
+                    // 無効化しかねないため、その間だけ編集を開けないようにする。
+                    disabled={togglingNotificationItemId === item.id}
                     activeOpacity={0.8}
                   >
                     <View style={styles.itemMainRow}>
+                      <View
+                        style={[
+                          styles.itemColorIndicator,
+                          { backgroundColor: item.color || DEFAULT_COLORS.task },
+                        ]}
+                      />
                       <Text style={styles.itemText}>{item.text}</Text>
                       {hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
@@ -465,22 +613,18 @@ const HomeScreen = ({ navigation }: Props) => {
                     style={styles.notificationToggle}
                     onPress={() => void handleToggleItemNotification(item)}
                     disabled={togglingNotificationItemId !== null}
-                    accessibilityRole="checkbox"
+                    accessibilityRole="switch"
                     accessibilityLabel={`${item.text}の通知`}
                     accessibilityState={{
                       checked: item.notificationEnabled,
                       disabled: togglingNotificationItemId !== null,
                     }}
                   >
-                    <View style={[
-                      styles.notificationCheckbox,
-                      item.notificationEnabled && styles.notificationCheckboxChecked,
-                    ]}>
-                      {item.notificationEnabled ? (
-                        <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
-                      ) : null}
-                    </View>
-                    <Text style={styles.notificationToggleText}>通知</Text>
+                    <Ionicons
+                      name={item.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
+                      size={18}
+                      color={item.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
+                    />
                   </TouchableOpacity>
                 </View>
               </Swipeable>
@@ -491,253 +635,5 @@ const HomeScreen = ({ navigation }: Props) => {
     </SafeAreaView>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xl,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "700",
-    marginBottom: 10,
-  },
-  notificationWarning: {
-    backgroundColor: "#FFF8D6",
-    borderBottomWidth: 1,
-    borderBottomColor: "#F0E2A0",
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-  },
-  notificationWarningText: {
-    color: "#666",
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  headerActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
-  settingsButton: {
-    padding: 4,
-  },
-  addTaskButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-  },
-  addTaskButtonText: {
-    color: colors.onPrimary,
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  listContent: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-  },
-  sectionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 12,
-    paddingVertical: 8,
-  },
-  sectionHeaderText: {
-    flexShrink: 1,
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  sectionWeekdays: {
-    flexShrink: 0,
-    color: "#666",
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  itemContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: "#eee",
-  },
-  itemEditButton: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-  },
-  itemMainRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  itemText: {
-    flexShrink: 1,
-    fontSize: 15,
-    fontWeight: "500",
-  },
-  itemDateSummary: {
-    flexShrink: 0,
-    color: "#666",
-    fontSize: 12,
-  },
-  notificationToggle: {
-    minHeight: 44,
-    paddingHorizontal: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  notificationCheckbox: {
-    width: 20,
-    height: 20,
-    borderWidth: 1,
-    borderColor: colors.tabInactive,
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background,
-  },
-  notificationCheckboxChecked: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primary,
-  },
-  notificationToggleText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-  },
-  stateContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  stateText: {
-    fontSize: 14,
-    color: "#666",
-  },
-  deleteAction: {
-    width: 84,
-    height: "100%",
-    backgroundColor: colors.destructive,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radii.md,
-    marginVertical: 4,
-  },
-  deleteActionText: {
-    color: colors.onPrimary,
-    fontWeight: "700",
-    fontSize: 13,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
-  modalContent: {
-    width: "100%",
-    maxWidth: 420,
-    backgroundColor: colors.background,
-    borderRadius: radii.modal,
-    padding: 20,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 16,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: radii.md,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 14,
-  },
-  modalTextArea: {
-    minHeight: 96,
-  },
-  fieldLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 6,
-  },
-  dateRow: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 14,
-  },
-  dateColumn: {
-    flex: 1,
-  },
-  dateSelectorButton: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: radii.md,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    backgroundColor: colors.background,
-  },
-  dateSelectorButtonText: {
-    fontSize: 14,
-    color: "#333",
-  },
-  datePickerPanel: {
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 14,
-  },
-  datePickerCloseButton: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.primary,
-    borderRadius: radii.sm,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginTop: 8,
-  },
-  datePickerCloseButtonText: {
-    color: colors.onPrimary,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  modalButtons: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: radii.md,
-    alignItems: "center",
-  },
-  modalButtonCancel: {
-    backgroundColor: colors.cancelBackground,
-  },
-  modalButtonSubmit: {
-    backgroundColor: colors.primary,
-  },
-  modalButtonText: {
-    color: colors.onPrimary,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-});
 
 export default HomeScreen;

@@ -1,6 +1,22 @@
 import { StyleSheet } from "react-native";
 import { colors, radii, spacing } from "../tokens";
 
+// checkbox/checkboxMutedの共通レイアウト部分。枠線色・太さだけがFigma上で
+// チェックボックスごとに違うため、ここに切り出して2つの完結したスタイルとして
+// 定義する(以前は[styles.checkbox, styles.notificationCheckbox]という配列合成で
+// 上書きしていたが、配列の順序に依存する壊れやすい構成だったため単純化した)。
+const checkboxBase = {
+  width: 20,
+  height: 20,
+  // radii.smはボタン用トークンでAndroidでは20(=このボックスの半径)になり円形化してしまうため、
+  // 固定サイズのチェックボックスには使わず控えめな角丸を直接指定する。
+  borderRadius: 4,
+  alignItems: "center",
+  justifyContent: "center",
+  marginRight: 8,
+  backgroundColor: colors.background,
+} as const;
+
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -121,17 +137,17 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   checkbox: {
-    width: 20,
-    height: 20,
+    ...checkboxBase,
     borderWidth: 1,
     borderColor: "#888",
-    // radii.smはボタン用トークンでAndroidでは20(=このボックスの半径)になり円形化してしまうため、
-    // 固定サイズのチェックボックスには使わず控えめな角丸を直接指定する。
-    borderRadius: 4,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
-    backgroundColor: colors.background,
+  },
+  // Figma上で「通知を設定しない」チェックボックスだけ枠線が他(#888/1px)より
+  // 薄く太い(#bfbfbf/1.5px)。checkboxとの差分をarray合成で上書きするのではなく、
+  // それぞれ単体で使い切れる完結したスタイルとして定義する。
+  checkboxMuted: {
+    ...checkboxBase,
+    borderWidth: 1.5,
+    borderColor: "#bfbfbf",
   },
   checkboxChecked: {
     backgroundColor: colors.primary,
@@ -167,6 +183,10 @@ export const styles = StyleSheet.create({
     minHeight: 180,
     textAlignVertical: "top",
   },
+  colorPickerContainer: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
   submitButton: {
     // 画面内の他の青いボタン群と区別できるよう、送信の確定操作だけは専用色を使う。
     backgroundColor: colors.success,
@@ -198,28 +218,6 @@ export const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 16,
     lineHeight: 20,
-  },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: radii.md,
-    padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
-  },
-  modalFieldLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    marginBottom: 4,
-  },
-  modalFieldHelp: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    marginBottom: 8,
-  },
-  modalWeekdayGroup: {
-    width: "100%",
-    marginBottom: 4,
   },
   modalButtons: {
     flexDirection: "row",

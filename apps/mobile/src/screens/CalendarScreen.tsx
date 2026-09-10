@@ -10,247 +10,52 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import { SavedItem } from "@milkbox/shared/repositories/types";
+import type { SavedItem } from "@milkbox/shared";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
 import { colors } from "../styles/tokens";
-
-// 各エントリはbg(塗り)/border(縁取り)/light(バッジ背景)/lightText(バッジ文字)の
-// 4色が意図的に異なるコントラスト・区別のために設計されている。
-// トークン統一のためcolors.primaryへ一本化すると縁取りが塗りと同色になり見えなくなる、
-// バッジ文字のコントラストが下がるなどの見た目のリグレッションが起きるため、
-// このパレットはトークン化せず既存の専用配色のままにする。
-const BAR_PALETTE = [
-  { bg: "#3B82F6", border: "#2563EB", light: "#DBEAFE", lightText: "#1D4ED8" },
-  { bg: "#10B981", border: "#059669", light: "#D1FAE5", lightText: "#065F46" },
-  { bg: "#8B5CF6", border: "#7C3AED", light: "#EDE9FE", lightText: "#5B21B6" },
-  { bg: "#F97316", border: "#EA580C", light: "#FFEDD5", lightText: "#C2410C" },
-  { bg: "#F43F5E", border: "#E11D48", light: "#FFE4E6", lightText: "#9F1239" },
-  { bg: "#06B6D4", border: "#0891B2", light: "#CFFAFE", lightText: "#0E7490" },
-  { bg: "#F59E0B", border: "#D97706", light: "#FEF3C7", lightText: "#B45309" },
-] as const;
+import {
+  buildMonthGrid,
+  createDateKey,
+  parseItemDate,
+  parsePointDate,
+  startOfDay,
+  toDateKey,
+  formatMonthLabel,
+} from "../utils/calendarDates";
+import {
+  UNCATEGORIZED_KEY,
+  UNCATEGORIZED_LABEL,
+  formatScheduleTime,
+  groupScheduleItems,
+  isMultiDayRange,
+  resolveDisplayColor,
+  sortScheduleItemsByTime,
+} from "../utils/scheduleGrouping";
+import { getRangeBarsForWeek } from "../utils/ganttBars";
 
 const BAR_H = 22;
 const BAR_PITCH = 26;
 
 const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
-function startOfDay(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
+// 日曜/土曜/平日の色分けを、曜日ヘッダーと日付セルの2箇所で同じ配色を
+// 使い回すための一元化(以前は同じ3色がベタ書きで重複していた)。
+const WEEKDAY_TINT_SUNDAY = "#f87171";
+const WEEKDAY_TINT_SATURDAY = "#60a5fa";
+const WEEKDAY_TINT_WEEKDAY = "#6b7280";
 
-function createDateKey(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-}
-
-function toDateKey(value: string): string {
-  if (value.includes("T") || value.includes(" ")) {
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return value;
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-  return value;
-}
-
-function parseItemDate(value?: string): Date | null {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return startOfDay(parsed);
-}
-
-function getCalendarStart(date: Date): Date {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  return new Date(
-    firstDayOfMonth.getFullYear(),
-    firstDayOfMonth.getMonth(),
-    firstDayOfMonth.getDate() - firstDayOfMonth.getDay(),
-  );
-}
-
-function buildMonthGrid(date: Date): Date[][] {
-  const startDate = getCalendarStart(date);
-  return Array.from({ length: 6 }, (_, weekIndex) =>
-    Array.from({ length: 7 }, (_, dayIndex) => {
-      const offset = weekIndex * 7 + dayIndex;
-      return new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate() + offset,
-      );
-    }),
-  );
-}
-
-function formatMonthLabel(date: Date): string {
-  return `${date.getFullYear()}年${date.getMonth() + 1}月`;
-}
-
-export function formatTimeOfDay(value?: string): string | null {
-  if (!value || !value.includes("T")) return null;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleTimeString("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-export function formatScheduleTime(item: SavedItem): string {
-  const start = formatTimeOfDay(item.startDate);
-  const end = formatTimeOfDay(item.endDate);
-  if (start && end) return `${start} 〜 ${end}`;
-  if (start) return start;
-  if (end) return `〜 ${end}`;
-  // 曜日繰り返しタスクの date は作成時刻が入るため時間表示には使わない
-  if (parseWeekdays(item.weekdays).length > 0) return "終日";
-  return formatTimeOfDay(item.date) ?? "終日";
-}
-
-function isMultiDayRange(item: SavedItem): boolean {
-  if (!item.startDate || !item.endDate) return false;
-  const s = parseItemDate(item.startDate);
-  const e = parseItemDate(item.endDate);
-  if (!s || !e) return false;
-  return s.getTime() !== e.getTime();
-}
-
-function parsePointDate(value?: string): Date | null {
-  if (!value) return null;
-
-  if (!value.includes("T") && !value.includes(" ")) {
-    const parts = value.split("-").map(Number);
-    if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
-    return new Date(parts[0], parts[1] - 1, parts[2], 9, 0, 0, 0);
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function hashColorIdx(key: string | undefined): number {
-  if (!key) return 0;
-  let h = 0;
-  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) & 0xffffffff;
-  return Math.abs(h) % BAR_PALETTE.length;
-}
-
-interface RangeBarEntry {
-  item: SavedItem;
-  startCol: number;
-  endCol: number;
-  continuesLeft: boolean;
-  continuesRight: boolean;
-  isWeekday: boolean;
-  lane: number;
-  colorIdx: number;
-}
-
-function assignLanes(entries: Omit<RangeBarEntry, "lane">[]): RangeBarEntry[] {
-  const laneEnds: number[] = [];
-  return entries.map((entry) => {
-    let lane = laneEnds.findIndex((end) => end < entry.startCol);
-    if (lane === -1) lane = laneEnds.length;
-    laneEnds[lane] = entry.endCol;
-    return { ...entry, lane };
-  });
-}
-
-function getRangeBarsForWeek(
-  rangeItems: SavedItem[],
-  weekdayItems: SavedItem[],
-  week: Date[],
-  colorMap: Map<string | undefined, number>,
-): RangeBarEntry[] {
-  const weekStart = startOfDay(week[0]);
-  const weekEnd = startOfDay(week[6]);
-  const entries: Omit<RangeBarEntry, "lane">[] = [];
-
-  for (const item of rangeItems) {
-    if (!item.startDate || !item.endDate) continue;
-    const itemStart = parseItemDate(item.startDate);
-    const itemEnd = parseItemDate(item.endDate);
-    if (!itemStart || !itemEnd) continue;
-    if (itemEnd < weekStart || itemStart > weekEnd) continue;
-
-    const cs = itemStart < weekStart ? weekStart : itemStart;
-    const ce = itemEnd > weekEnd ? weekEnd : itemEnd;
-    const startCol = week.findIndex((d) => createDateKey(d) === createDateKey(cs));
-    const endCol = week.findIndex((d) => createDateKey(d) === createDateKey(ce));
-    if (startCol === -1 || endCol === -1) continue;
-
-    entries.push({
-      item,
-      startCol,
-      endCol,
-      continuesLeft: itemStart < weekStart,
-      continuesRight: itemEnd > weekEnd,
-      isWeekday: false,
-      colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
-    });
-  }
-
-  for (const item of weekdayItems) {
-    const weekdaySet = new Set(parseWeekdays(item.weekdays));
-    const selectedCols = week
-      .map((date, index) => (weekdaySet.has(date.getDay()) ? index : null))
-      .filter((index): index is number => index !== null);
-    if (selectedCols.length === 0) continue;
-
-    let startCol = selectedCols[0];
-    let endCol = selectedCols[0];
-
-    for (const currentCol of selectedCols.slice(1)) {
-      if (currentCol === endCol + 1) {
-        endCol = currentCol;
-        continue;
-      }
-
-      entries.push({
-        item,
-        startCol,
-        endCol,
-        continuesLeft: false,
-        continuesRight: false,
-        isWeekday: true,
-        colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
-      });
-
-      startCol = currentCol;
-      endCol = currentCol;
-    }
-
-    if (startCol !== undefined && endCol !== undefined) {
-      entries.push({
-        item,
-        startCol,
-        endCol,
-        continuesLeft: false,
-        continuesRight: false,
-        isWeekday: true,
-        colorIdx: colorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName),
-      });
-    }
-  }
-
-  entries.sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
-  return assignLanes(entries);
+function getWeekdayTint(dayOfWeek: number): string {
+  if (dayOfWeek === 0) return WEEKDAY_TINT_SUNDAY;
+  if (dayOfWeek === 6) return WEEKDAY_TINT_SATURDAY;
+  return WEEKDAY_TINT_WEEKDAY;
 }
 
 const CalendarScreen = () => {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
+  const [scheduleDisplayMode, setScheduleDisplayMode] = useState<"category" | "time">("category");
   const [items, setItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -279,19 +84,13 @@ const CalendarScreen = () => {
     }, [loadItems]),
   );
 
-  const { rangeItems, weekdayItems, weekdayBarItems, pointItemsByDate, categoryColorMap } = useMemo(() => {
+  const { rangeItems, weekdayItems, weekdayBarItems, pointItemsByDate } = useMemo(() => {
     const range: SavedItem[] = [];
     const weekday: SavedItem[] = [];
     const weekdayBarMap = new Map<string, { item: SavedItem; weekdays: Set<number> }>();
     const point = new Map<string, SavedItem[]>();
-    const colorMap = new Map<string | undefined, number>();
-    let colorIdx = 0;
 
     for (const item of items) {
-      if (item.categoryName && !colorMap.has(item.categoryName)) {
-        colorMap.set(item.categoryName, colorIdx++ % BAR_PALETTE.length);
-      }
-
       const itemWeekdays = parseWeekdays(item.weekdays);
       if (itemWeekdays.length > 0) {
         weekday.push(item);
@@ -334,7 +133,6 @@ const CalendarScreen = () => {
         weekdays: JSON.stringify([...weekdays].sort((left, right) => left - right)),
       })),
       pointItemsByDate: point,
-      categoryColorMap: colorMap,
     };
   }, [items]);
 
@@ -359,12 +157,20 @@ const CalendarScreen = () => {
 
     result.push(...(pointItemsByDate.get(selectedDateKey) ?? []));
 
-    return result.sort((left, right) => {
-      const leftTime = parsePointDate(left.startDate ?? left.endDate ?? left.date)?.getTime() ?? 0;
-      const rightTime = parsePointDate(right.startDate ?? right.endDate ?? right.date)?.getTime() ?? 0;
-      return leftTime - rightTime;
-    });
+    // 時刻順の並べ替えはgroupScheduleItems()が同じgetScheduleTimeValue()で
+    // 必ず行うため、ここでは行わない(二重ソート・二重の日付パースを避ける)。
+    return result;
   }, [rangeItems, weekdayItems, pointItemsByDate, selectedDate, selectedDateKey]);
+  // 表示モードで使う方だけ計算する(どちらもO(n log n)のソートを含むため、
+  // 非表示側まで毎回計算するのは無駄)。
+  const selectedItemGroups = useMemo(
+    () => (scheduleDisplayMode === "category" ? groupScheduleItems(selectedItems) : []),
+    [scheduleDisplayMode, selectedItems],
+  );
+  const selectedItemsByTime = useMemo(
+    () => (scheduleDisplayMode === "time" ? sortScheduleItemsByTime(selectedItems) : []),
+    [scheduleDisplayMode, selectedItems],
+  );
 
   const moveMonth = useCallback((diff: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
@@ -402,14 +208,7 @@ const CalendarScreen = () => {
           <View style={styles.weekRow}>
             {WEEKDAY_LABELS.map((label, index) => (
               <View key={label} style={styles.weekCell}>
-                <Text
-                  style={[
-                    styles.weekLabel,
-                    index === 0 && { color: "#f87171" },
-                    index === 6 && { color: "#60a5fa" },
-                    index > 0 && index < 6 && { color: "#6b7280" },
-                  ]}
-                >
+                <Text style={[styles.weekLabel, { color: getWeekdayTint(index) }]}>
                   {label}
                 </Text>
               </View>
@@ -418,7 +217,7 @@ const CalendarScreen = () => {
 
           <View style={styles.calendarBody}>
             {monthGrid.map((week, weekIndex) => {
-              const bars = getRangeBarsForWeek(rangeItems, weekdayBarItems, week, categoryColorMap);
+              const bars = getRangeBarsForWeek(rangeItems, weekdayBarItems, week);
               const laneCount = bars.length > 0 ? Math.max(...bars.map((b) => b.lane)) + 1 : 0;
 
               return (
@@ -446,8 +245,9 @@ const CalendarScreen = () => {
                               !isCurrentMonth && styles.dayNumberMuted,
                               isSelected && styles.dayNumberSelected,
                               isToday && !isSelected && styles.dayNumberToday,
-                              !isSelected && !isToday && date.getDay() === 0 && { color: "#f87171" },
-                              !isSelected && !isToday && date.getDay() === 6 && { color: "#60a5fa" },
+                              !isSelected && !isToday
+                                && (date.getDay() === 0 || date.getDay() === 6)
+                                && { color: getWeekdayTint(date.getDay()) },
                             ]}
                           >
                             {date.getDate()}
@@ -467,7 +267,7 @@ const CalendarScreen = () => {
                   {laneCount > 0 && (
                     <View style={[localStyles.barContainer, { height: laneCount * BAR_PITCH + 4 }]}>
                       {bars.map((bar) => {
-                        const palette = BAR_PALETTE[bar.colorIdx];
+                        const taskColor = resolveDisplayColor(bar.item);
                         const span = bar.endCol - bar.startCol + 1;
                         const padL = bar.continuesLeft ? 0 : 3;
                         const padR = bar.continuesRight ? 0 : 3;
@@ -489,9 +289,9 @@ const CalendarScreen = () => {
                                 height: BAR_H,
                                 marginLeft: padL,
                                 marginRight: padR,
-                                backgroundColor: bar.isWeekday ? `${palette.bg}22` : palette.bg,
+                                backgroundColor: bar.isWeekday ? `${taskColor}22` : taskColor,
                                 borderWidth: bar.isWeekday ? 1.5 : 0,
-                                borderColor: bar.isWeekday ? palette.bg : "transparent",
+                                borderColor: bar.isWeekday ? taskColor : "transparent",
                                 borderStyle: bar.isWeekday ? "dashed" : "solid",
                                 borderTopLeftRadius: rL,
                                 borderBottomLeftRadius: rL,
@@ -507,7 +307,7 @@ const CalendarScreen = () => {
                                     localStyles.ganttBarDot,
                                     {
                                       backgroundColor: bar.isWeekday
-                                        ? palette.bg
+                                        ? taskColor
                                         : "rgba(255,255,255,0.7)",
                                     },
                                   ]}
@@ -515,7 +315,7 @@ const CalendarScreen = () => {
                                 <Text
                                   style={[
                                     localStyles.ganttBarText,
-                                    { color: bar.isWeekday ? palette.bg : "#ffffff" },
+                                    { color: bar.isWeekday ? taskColor : "#ffffff" },
                                   ]}
                                   numberOfLines={1}
                                 >
@@ -552,39 +352,145 @@ const CalendarScreen = () => {
             </Pressable>
           </View>
 
+          <View style={styles.scheduleDisplayToggle} accessibilityRole="radiogroup">
+            {(["category", "time"] as const).map((mode) => {
+              const selected = scheduleDisplayMode === mode;
+              return (
+                <Pressable
+                  key={mode}
+                  style={[
+                    styles.scheduleDisplayToggleButton,
+                    selected && styles.scheduleDisplayToggleButtonSelected,
+                  ]}
+                  onPress={() => setScheduleDisplayMode(mode)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected }}
+                >
+                  <Text
+                    style={[
+                      styles.scheduleDisplayToggleText,
+                      selected && styles.scheduleDisplayToggleTextSelected,
+                    ]}
+                  >
+                    {mode === "category" ? "カテゴリ" : "時間順"}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <View style={styles.scheduleList}>
             {selectedItems.length === 0 ? (
               <View style={styles.emptyState}>
                 <Text style={styles.emptyTitle}>予定はありません</Text>
                 <Text style={styles.emptyText}>AddTask で登録したタスクがここに表示されます。</Text>
               </View>
+            ) : scheduleDisplayMode === "category" ? (
+              selectedItemGroups.flatMap((group) => {
+                // 「カテゴリ指定なし」はitem.categoryColorを持たず各タスクが個別に
+                // 色を選んでいるため、1枚のカードに束ねて代表色を使うと他のタスクの
+                // 色が無視されてしまう。この場合だけグループ化前と同じ1タスク=1カード
+                // (各カードが自分自身のcolorでアクセントバーを出す)に戻す。
+                if (group.key === UNCATEGORIZED_KEY) {
+                  return group.items.map((item) => {
+                    const taskColor = resolveDisplayColor(item);
+                    const isRange = isMultiDayRange(item);
+
+                    return (
+                      <View key={item.id} style={styles.scheduleCard}>
+                        <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
+                        <View style={styles.scheduleTaskRow}>
+                          <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                            {formatScheduleTime(item)}
+                          </Text>
+                          <Text style={styles.scheduleText}>{item.text}</Text>
+                        </View>
+                        {isRange && item.startDate && item.endDate ? (
+                          <Text style={localStyles.rangeDateText}>
+                            {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
+                          </Text>
+                        ) : null}
+                      </View>
+                    );
+                  });
+                }
+
+                // 実カテゴリのグループは全アイテムが同じcategoryColorを共有するため、
+                // 先頭アイテムから読んでも代表色として問題ない。
+                const groupColor = resolveDisplayColor(group.items[0]);
+
+                return [
+                  <View key={group.key} style={styles.scheduleCard}>
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: groupColor }]} />
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: `${groupColor}22` },
+                      ]}
+                    >
+                      <Text style={[styles.categoryBadgeText, { color: groupColor }]}>
+                        {group.categoryName}
+                      </Text>
+                    </View>
+                    {group.items.map((item, index) => {
+                      const taskColor = resolveDisplayColor(item);
+                      const isRange = isMultiDayRange(item);
+
+                      return (
+                        <View
+                          key={item.id}
+                          style={[
+                            styles.scheduleTask,
+                            index > 0 && styles.scheduleTaskDivider,
+                          ]}
+                        >
+                          <View style={styles.scheduleTaskRow}>
+                            <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                              {formatScheduleTime(item)}
+                            </Text>
+                            <Text style={styles.scheduleText}>{item.text}</Text>
+                          </View>
+                          {isRange && item.startDate && item.endDate ? (
+                            <Text style={localStyles.rangeDateText}>
+                              {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
+                            </Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>,
+                ];
+              })
             ) : (
-              selectedItems.map((item) => {
-                const colorIdx = categoryColorMap.get(item.categoryName) ?? hashColorIdx(item.categoryName);
-                const color = BAR_PALETTE[colorIdx];
+              selectedItemsByTime.map((item) => {
+                const taskColor = resolveDisplayColor(item);
                 const isRange = isMultiDayRange(item);
 
                 return (
                   <View key={item.id} style={styles.scheduleCard}>
-                    <View style={[styles.scheduleCardAccent, { backgroundColor: color.bg }]} />
-                    <View style={styles.scheduleRow}>
-                      <Text style={[styles.scheduleTime, { color: color.bg }]}>
-                        {formatScheduleTime(item)}
-                      </Text>
-                      {item.categoryName ? (
-                        <View style={[styles.categoryBadge, { backgroundColor: color.light }]}>
-                          <Text style={[styles.categoryBadgeText, { color: color.lightText }]}>
-                            {item.categoryName}
+                    <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
+                    <View style={styles.scheduleTaskRow}>
+                      <View style={styles.chronologicalTaskContent}>
+                        <Text style={[styles.scheduleTime, { color: taskColor }]}>
+                          {formatScheduleTime(item)}
+                        </Text>
+                        <Text style={styles.scheduleText}>{item.text}</Text>
+                        {isRange && item.startDate && item.endDate ? (
+                          <Text style={localStyles.rangeDateText}>
+                            {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
                           </Text>
-                        </View>
-                      ) : null}
+                        ) : null}
+                      </View>
+                      <View style={styles.chronologicalCategoryColumn}>
+                        <Text
+                          style={[styles.chronologicalCategoryText, { color: taskColor }]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {item.categoryName ?? UNCATEGORIZED_LABEL}
+                        </Text>
+                      </View>
                     </View>
-                    <Text style={styles.scheduleText}>{item.text}</Text>
-                    {isRange && item.startDate && item.endDate ? (
-                      <Text style={localStyles.rangeDateText}>
-                        {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
-                      </Text>
-                    ) : null}
                   </View>
                 );
               })

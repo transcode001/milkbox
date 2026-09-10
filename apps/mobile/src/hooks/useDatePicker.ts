@@ -18,12 +18,13 @@ export interface UseDatePickerResult {
   onDateChange: (event: DateTimePickerEvent, selectedDate?: Date) => void;
   openDatePicker: (field: DateField, mode?: DatePickerMode) => void;
   clearDate: (field: DateField) => void;
+  clearDatePart: (field: DateField) => void;
   formatDate: (date: Date) => string;
   formatTime: (date: Date) => string;
   formatDateTime: (date: Date) => string;
 }
 
-const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
+export const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
   const base = current ?? new Date();
   return new Date(
     selectedDate.getFullYear(),
@@ -36,7 +37,7 @@ const mergeDatePart = (current: Date | null, selectedDate: Date): Date => {
   );
 };
 
-const mergeTimePart = (current: Date | null, selectedDate: Date): Date => {
+export const mergeTimePart = (current: Date | null, selectedDate: Date): Date => {
   const base = current ?? new Date();
   return new Date(
     base.getFullYear(),
@@ -113,6 +114,14 @@ export const useDatePicker = (): UseDatePickerResult => {
     }
   };
 
+  const clearDatePart = (field: DateField) => {
+    if (field === "start") {
+      setStartHasDate(false);
+    } else {
+      setEndHasDate(false);
+    }
+  };
+
   const formatDate = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -144,6 +153,7 @@ export const useDatePicker = (): UseDatePickerResult => {
     onDateChange,
     openDatePicker,
     clearDate,
+    clearDatePart,
     formatDate,
     formatTime,
     formatDateTime,

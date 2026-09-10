@@ -139,6 +139,32 @@ export const styles = StyleSheet.create({
   scheduleList: {
     paddingBottom: 8,
   },
+  scheduleDisplayToggle: {
+    alignSelf: "flex-end",
+    flexDirection: "row",
+    padding: 3,
+    marginBottom: 12,
+    borderRadius: radii.md,
+    backgroundColor: "#E8EAF0",
+  },
+  scheduleDisplayToggleButton: {
+    minWidth: 84,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radii.sm,
+    alignItems: "center",
+  },
+  scheduleDisplayToggleButtonSelected: {
+    backgroundColor: colors.background,
+  },
+  scheduleDisplayToggleText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  scheduleDisplayToggleTextSelected: {
+    color: colors.primary,
+  },
   emptyState: {
     backgroundColor: colors.background,
     borderRadius: 16,
@@ -173,18 +199,43 @@ export const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderBottomLeftRadius: 16,
   },
-  scheduleRow: {
+  scheduleTask: {
+    paddingVertical: 10,
+  },
+  scheduleTaskDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "#D8DAE2",
+  },
+  scheduleTaskRow: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 8,
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  chronologicalCategoryColumn: {
+    width: 112,
+    flexShrink: 0,
+    paddingLeft: 10,
+    borderLeftWidth: StyleSheet.hairlineWidth,
+    borderLeftColor: "#D8DAE2",
+  },
+  chronologicalCategoryText: {
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    textAlign: "left",
+  },
+  chronologicalTaskContent: {
+    flex: 1,
+    minWidth: 0,
   },
   scheduleTime: {
+    width: 110,
     fontSize: 13,
     fontWeight: "700",
     color: colors.primary,
   },
   categoryBadge: {
+    alignSelf: "flex-start",
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 999,
@@ -196,6 +247,7 @@ export const styles = StyleSheet.create({
     fontWeight: "600",
   },
   scheduleText: {
+    flex: 1,
     fontSize: 15,
     color: colors.textPrimary,
     lineHeight: 22,

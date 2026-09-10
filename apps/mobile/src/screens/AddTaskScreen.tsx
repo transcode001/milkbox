@@ -1,10 +1,10 @@
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Modal, Keyboard, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from "@expo/vector-icons";
-import { DEFAULT_REMINDER_MINUTES, NONE_REMINDER_VALUE, REMINDER_OPTIONS } from "@milkbox/shared";
+import { DEFAULT_REMINDER_MINUTES } from "@milkbox/shared";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import { modalStyles } from "../styles/modalStyles";
 import { colors } from "../styles/tokens";
@@ -12,21 +12,21 @@ import type { RootStackParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { useCategory } from "../hooks/useCategory";
 import { useDatePicker } from "../hooks/useDatePicker";
+import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 import {
   isEndDateBeforeStartDate,
   resolveScheduleWeekdays,
+  stripDateForTimeOnlyComparison,
   toSavedDate,
 } from "../utils/dateValidation";
 import { parseWeekdays, WEEKDAY_LABELS } from "../utils/weekdays";
-import { WeekdayButtonGroup } from "../components/WeekdayButtonGroup";
 import { SelectModal, type SelectOption } from "../components/SelectModal";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
+import { ColorPicker } from "../components/ColorPicker";
+import { DEFAULT_COLORS } from "../constants/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
 const DEFAULT_CATEGORY_WEEKDAYS = [1, 2, 3, 4, 5];
-const REMINDER_SELECT_OPTIONS: SelectOption[] = REMINDER_OPTIONS
-  .filter((option) => option.minutes !== NONE_REMINDER_VALUE)
-  .map((option) => ({ value: option.minutes.toString(), label: option.label }));
 
 const AddTaskScreen = ({ navigation }: Props) => {
   const { dbManager } = useDatabaseManager();
@@ -37,10 +37,12 @@ const AddTaskScreen = ({ navigation }: Props) => {
     noCategoryChecked,
     showAddCategoryModal,
     newCategoryName,
+    newCategoryColor,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
     setNewCategoryName,
+    setNewCategoryColor,
     loadCategories,
     handleAddCategory,
     handleUpdateCategory,
@@ -58,48 +60,44 @@ const AddTaskScreen = ({ navigation }: Props) => {
     onDateChange,
     openDatePicker,
     clearDate,
+    clearDatePart,
     formatDate,
     formatTime,
   } = useDatePicker();
   const [text, setText] = useState("");
+  const [taskColor, setTaskColor] = useState<string>(DEFAULT_COLORS.task);
   const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
   const [newCategoryWeekdays, setNewCategoryWeekdays] = useState<number[]>(DEFAULT_CATEGORY_WEEKDAYS);
-  const [notificationMinutesBefore, setNotificationMinutesBefore] = useState(DEFAULT_REMINDER_MINUTES);
+  const reminder = useReminderPicker(DEFAULT_REMINDER_MINUTES);
   const [isCategoryListOpen, setIsCategoryListOpen] = useState(false);
-  const [isReminderListOpen, setIsReminderListOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<{
     id: number;
     name: string;
     weekdays: number[];
+    color: string;
   } | null>(null);
-  const lastReminderMinutesRef = useRef(DEFAULT_REMINDER_MINUTES);
 
   const closeCategoryList = useCallback(() => {
     setIsCategoryListOpen(false);
   }, []);
-  const closeReminderList = useCallback(() => {
-    setIsReminderListOpen(false);
-  }, []);
   const closeAddCategoryModal = useCallback(() => {
     setNewCategoryName("");
+    setNewCategoryColor(DEFAULT_COLORS.category);
     setNewCategoryWeekdays(DEFAULT_CATEGORY_WEEKDAYS);
     setShowAddCategoryModal(false);
-  }, [setNewCategoryName, setShowAddCategoryModal]);
+  }, [setNewCategoryColor, setNewCategoryName, setShowAddCategoryModal]);
 
   const inheritedWeekdays = useMemo(
     () => parseWeekdays(categories.find((category) => category.id.toString() === selectedOption)?.weekdays),
     [categories, selectedOption],
   );
-  const hasSelectedDate = startHasDate || endHasDate;
+  const hasSelectedDate = noCategoryChecked && (startHasDate || endHasDate);
   const effectiveWeekdays = resolveScheduleWeekdays(hasSelectedDate, inheritedWeekdays);
   const inheritedWeekdayLabel = inheritedWeekdays.length > 0
     ? inheritedWeekdays.map((weekday) => WEEKDAY_LABELS[weekday]).join("・")
     : null;
-  const selectedReminderLabel = REMINDER_OPTIONS.find(
-    (option) => option.minutes === notificationMinutesBefore,
-  )?.label ?? "30分前";
   const categoryOptions = useMemo<SelectOption[]>(
     () => categories.map((category) => ({
       value: category.id.toString(),
@@ -141,6 +139,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       id: category.id,
       name: category.name,
       weekdays: parseWeekdays(category.weekdays),
+      color: category.color,
     });
   };
 
@@ -150,6 +149,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       editingCategory.id,
       editingCategory.name,
       editingCategory.weekdays,
+      editingCategory.color,
     );
     if (updated) {
       setEditingCategory(null);
@@ -165,7 +165,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       [
         { text: "キャンセル", style: "cancel" },
         {
-          text: "未分類へ移動",
+          text: "カテゴリ指定なしへ移動",
           onPress: () => void handleDeleteCategory(categoryId, "uncategorize"),
         },
         {
@@ -184,38 +184,47 @@ const AddTaskScreen = ({ navigation }: Props) => {
     if (!text.trim()) return;
 
     if (!noCategoryChecked && !selectedOption) {
-      setCategoryError("タスクを選択してください");
+      setCategoryError("カテゴリを指定してください");
       return;
     }
 
-    if (isEndDateBeforeStartDate(startDate, endDate, startHasTime, endHasTime)) {
+    const validationStartDate = noCategoryChecked ? startDate : stripDateForTimeOnlyComparison(startDate);
+    const validationEndDate = noCategoryChecked ? endDate : stripDateForTimeOnlyComparison(endDate);
+
+    if (isEndDateBeforeStartDate(validationStartDate, validationEndDate, startHasTime, endHasTime)) {
       setDateError("終了日時が開始日時より前です。終了日時を再設定してください。");
       return;
     }
 
     const fallbackDate = startDate ?? endDate ?? new Date();
-    const notificationEnabled = notificationMinutesBefore !== NONE_REMINDER_VALUE;
 
     try {
       await dbManager.createItem({
         text: text.trim(),
         date: fallbackDate.toISOString(),
-        startDate: startDate ? toSavedDate(startDate, startHasTime) : undefined,
-        endDate: endDate ? toSavedDate(endDate, endHasTime) : undefined,
+        startDate:
+          startDate && (startHasTime || (noCategoryChecked && startHasDate))
+            ? toSavedDate(startDate, startHasTime)
+            : undefined,
+        endDate:
+          endDate && (endHasTime || (noCategoryChecked && endHasDate))
+            ? toSavedDate(endDate, endHasTime)
+            : undefined,
         weekdays:
           !noCategoryChecked && effectiveWeekdays.length > 0
             ? JSON.stringify(effectiveWeekdays)
             : undefined,
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
-        notificationEnabled,
-        notificationMinutesBefore,
+        notificationEnabled: reminder.notificationEnabled,
+        notificationMinutesBefore: reminder.notificationMinutesBefore,
+        color: taskColor,
       });
 
       setText("");
+      setTaskColor(DEFAULT_COLORS.task);
       clearDate("start");
       clearDate("end");
-      setNotificationMinutesBefore(DEFAULT_REMINDER_MINUTES);
-      lastReminderMinutesRef.current = DEFAULT_REMINDER_MINUTES;
+      reminder.resetReminder(DEFAULT_REMINDER_MINUTES, true);
       setActiveDatePicker(null);
       closeCategoryList();
       setShowPostSubmitModal(true);
@@ -248,7 +257,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>登録完了</Text>
-            <Text style={styles.modalMessage}>続けて予定を登録しますか？</Text>
+            <Text style={styles.modalMessage}>続けてタスクまたはカテゴリを登録しますか？</Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 onPress={() => setShowPostSubmitModal(false)}
@@ -272,64 +281,32 @@ const AddTaskScreen = ({ navigation }: Props) => {
         </View>
       </Modal>
 
-      <Modal
+      <CategoryEditorModal
         visible={showAddCategoryModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={closeAddCategoryModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>カテゴリを追加</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={newCategoryName}
-              onChangeText={setNewCategoryName}
-              placeholder="カテゴリ名を入力"
-              returnKeyType="done"
-              onSubmitEditing={() => {
-                Keyboard.dismiss();
-                void submitNewCategory();
-              }}
-            />
-            <Text style={styles.modalFieldLabel}>曜日</Text>
-            <Text style={styles.modalFieldHelp}>このカテゴリで繰り返す曜日を選択してください。</Text>
-            <View style={styles.modalWeekdayGroup}>
-              <WeekdayButtonGroup
-                selectedWeekdays={newCategoryWeekdays}
-                onToggleWeekday={toggleNewCategoryWeekday}
-              />
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={closeAddCategoryModal}
-              >
-                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
-                  キャンセル
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit]}
-                onPress={() => {
-                  void submitNewCategory();
-                }}
-              >
-                <Text style={styles.modalButtonText}>追加</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+        mode="add"
+        name={newCategoryName}
+        weekdays={newCategoryWeekdays}
+        color={newCategoryColor}
+        onChangeName={setNewCategoryName}
+        onToggleWeekday={toggleNewCategoryWeekday}
+        onChangeColor={setNewCategoryColor}
+        onCancel={closeAddCategoryModal}
+        onSave={() => void submitNewCategory()}
+      />
 
       <CategoryEditorModal
         visible={editingCategory !== null}
+        mode="edit"
         name={editingCategory?.name ?? ""}
         weekdays={editingCategory?.weekdays ?? []}
+        color={editingCategory?.color ?? DEFAULT_COLORS.category}
         onChangeName={(name) => {
           setEditingCategory((current) => current ? { ...current, name } : current);
         }}
         onToggleWeekday={toggleEditingCategoryWeekday}
+        onChangeColor={(color) => {
+          setEditingCategory((current) => current ? { ...current, color } : current);
+        }}
         onCancel={() => setEditingCategory(null)}
         onSave={() => void submitCategoryUpdate()}
       />
@@ -350,13 +327,15 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   <TouchableOpacity
                     style={styles.checkboxRow}
                     onPress={() => {
-                      setNoCategoryChecked((prev) => {
-                        const next = !prev;
-                        if (next) {
-                          closeCategoryList();
-                        }
-                        return next;
-                      });
+                      const next = !noCategoryChecked;
+                      setNoCategoryChecked(next);
+                      if (next) {
+                        closeCategoryList();
+                      } else {
+                        clearDatePart("start");
+                        clearDatePart("end");
+                        setActiveDatePicker(null);
+                      }
                       setCategoryError(null);
                       setDateError(null);
                     }}
@@ -365,13 +344,13 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <View style={[styles.checkbox, noCategoryChecked && styles.checkboxChecked]}>
                       {noCategoryChecked ? <Text style={styles.checkboxMark}>✓</Text> : null}
                     </View>
-                    <Text style={styles.checkboxLabel}>タスク指定しない</Text>
+                    <Text style={styles.checkboxLabel}>カテゴリ指定しない</Text>
                   </TouchableOpacity>
 
                   <SelectModal
                     options={categoryOptions}
                     selectedValue={selectedOption}
-                    selectedLabel={selectedOption ? selectedCategoryName : "タスクを選択"}
+                    selectedLabel={selectedOption ? selectedCategoryName : "カテゴリを選択"}
                     isOpen={isCategoryListOpen}
                     disabled={noCategoryChecked}
                     accessibilityLabel="カテゴリを選択"
@@ -443,18 +422,29 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
+                  <View style={styles.colorPickerContainer}>
+                    <Text style={styles.dateLabel}>タスクの色</Text>
+                    <ColorPicker
+                      value={taskColor}
+                      defaultColor={DEFAULT_COLORS.task}
+                      onChange={setTaskColor}
+                    />
+                  </View>
+
                   <View style={styles.dateRow}>
                     <View>
                       <Text style={styles.dateLabel}>開始</Text>
                       <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("start", "date")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {startDate && startHasDate ? formatDate(startDate) : "日付"}
-                          </Text>
-                        </TouchableOpacity>
+                        {noCategoryChecked ? (
+                          <TouchableOpacity
+                            style={styles.dateSelectorButton}
+                            onPress={() => openDatePicker("start", "date")}
+                          >
+                            <Text style={styles.dateSelectorButtonText}>
+                              {startDate && startHasDate ? formatDate(startDate) : "日付"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.dateSelectorButton}
                           onPress={() => openDatePicker("start", "time")}
@@ -475,14 +465,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <View>
                       <Text style={styles.dateLabel}>終了</Text>
                       <View style={styles.dateControlRow}>
-                        <TouchableOpacity
-                          style={styles.dateSelectorButton}
-                          onPress={() => openDatePicker("end", "date")}
-                        >
-                          <Text style={styles.dateSelectorButtonText}>
-                            {endDate && endHasDate ? formatDate(endDate) : "日付"}
-                          </Text>
-                        </TouchableOpacity>
+                        {noCategoryChecked ? (
+                          <TouchableOpacity
+                            style={styles.dateSelectorButton}
+                            onPress={() => openDatePicker("end", "date")}
+                          >
+                            <Text style={styles.dateSelectorButtonText}>
+                              {endDate && endHasDate ? formatDate(endDate) : "日付"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : null}
                         <TouchableOpacity
                           style={styles.dateSelectorButton}
                           onPress={() => openDatePicker("end", "time")}
@@ -531,25 +523,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <Text style={styles.dateLabel}>通知タイミング</Text>
                     <TouchableOpacity
                       style={styles.checkboxRow}
-                      onPress={() => {
-                        setNotificationMinutesBefore((current) => {
-                          if (current === NONE_REMINDER_VALUE) {
-                            return lastReminderMinutesRef.current;
-                          }
-                          lastReminderMinutesRef.current = current;
-                          return NONE_REMINDER_VALUE;
-                        });
-                        closeReminderList();
-                      }}
+                      onPress={reminder.toggleReminderEnabled}
                       activeOpacity={0.8}
                     >
                       <View
                         style={[
-                          styles.checkbox,
-                          notificationMinutesBefore === NONE_REMINDER_VALUE && styles.checkboxChecked,
+                          styles.checkboxMuted,
+                          !reminder.notificationEnabled && styles.checkboxChecked,
                         ]}
                       >
-                        {notificationMinutesBefore === NONE_REMINDER_VALUE ? (
+                        {!reminder.notificationEnabled ? (
                           <Text style={styles.checkboxMark}>✓</Text>
                         ) : null}
                       </View>
@@ -557,17 +540,14 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     </TouchableOpacity>
                     <SelectModal
                       options={REMINDER_SELECT_OPTIONS}
-                      selectedValue={notificationMinutesBefore.toString()}
-                      selectedLabel={selectedReminderLabel}
-                      isOpen={isReminderListOpen}
-                      disabled={notificationMinutesBefore === NONE_REMINDER_VALUE}
+                      selectedValue={reminder.notificationMinutesBefore.toString()}
+                      selectedLabel={reminder.selectedReminderLabel}
+                      isOpen={reminder.isReminderListOpen}
+                      disabled={!reminder.notificationEnabled}
                       accessibilityLabel="通知タイミングを選択"
-                      onToggle={() => setIsReminderListOpen((current) => !current)}
-                      onClose={closeReminderList}
-                      onSelect={(value) => {
-                        setNotificationMinutesBefore(Number(value));
-                        closeReminderList();
-                      }}
+                      onToggle={() => reminder.setIsReminderListOpen((current) => !current)}
+                      onClose={() => reminder.setIsReminderListOpen(false)}
+                      onSelect={(value) => reminder.selectReminderMinutes(Number(value))}
                     />
                   </View>
                   <TouchableOpacity
