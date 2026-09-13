@@ -1,6 +1,6 @@
 // apps/mobile/src/repositories/sqlite/ItemRepository.ts
 import * as SQLite from 'expo-sqlite';
-import { DEFAULT_REMINDER_MINUTES, IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_REMINDER_MINUTES, IItemRepository, ItemCompletion, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 import { DEFAULT_COLORS } from '../../constants/colors';
 
 const DEFAULT_TASK_COLOR = DEFAULT_COLORS.task;
@@ -87,6 +87,39 @@ export class SQLiteItemRepository implements IItemRepository {
     }
   }
 
+  async initializeCompletionsTable(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS item_completions (
+        itemId INTEGER NOT NULL,
+        date TEXT NOT NULL,
+        completedAt TEXT NOT NULL,
+        PRIMARY KEY (itemId, date)
+      );
+    `);
+  }
+
+  async setCompletion(itemId: number, date: string, completed: boolean): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    if (completed) {
+      // 削除済みタスクへの遅延した完了操作で孤児行を作らない。
+      await this.db.runAsync(
+        'INSERT OR REPLACE INTO item_completions (itemId, date, completedAt) SELECT id, ?, ? FROM items WHERE id = ?',
+        [date, new Date().toISOString(), itemId]
+      );
+    } else {
+      await this.db.runAsync('DELETE FROM item_completions WHERE itemId = ? AND date = ?', [itemId, date]);
+    }
+  }
+
+  async findCompletionsForDate(date: string): Promise<Set<number>> {
+    if (!this.db) throw new Error('Database not initialized');
+    const rows = await this.db.getAllAsync<Pick<ItemCompletion, 'itemId'>>(
+      'SELECT itemId FROM item_completions WHERE date = ?', [date]
+    );
+    return new Set(rows.map((row) => row.itemId));
+  }
+
   private async getDatabaseVersion(): Promise<number> {
     if (!this.db) throw new Error('Database not initialized');
     const row = await this.db.getFirstAsync<{ user_version: number }>(
@@ -168,6 +201,7 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async clear(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
+    await this.db.execAsync('DELETE FROM item_completions;');
     await this.db.execAsync('DROP TABLE IF EXISTS items');
     await this.initializeTable();
   }
@@ -301,12 +335,20 @@ export class SQLiteItemRepository implements IItemRepository {
 
   async delete(id: number): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    await this.db.runAsync('DELETE FROM items WHERE id = ?', [id]);
+    await this.db.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync('DELETE FROM item_completions WHERE itemId = ?', [id]);
+      await transaction.runAsync('DELETE FROM items WHERE id = ?', [id]);
+    });
   }
 
   async deleteByCategoryId(categoryId: number): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
-    await this.db.runAsync('DELETE FROM items WHERE categoryId = ?', [categoryId]);
+    await this.db.withExclusiveTransactionAsync(async (transaction) => {
+      await transaction.runAsync(
+        'DELETE FROM item_completions WHERE itemId IN (SELECT id FROM items WHERE categoryId = ?)', [categoryId]
+      );
+      await transaction.runAsync('DELETE FROM items WHERE categoryId = ?', [categoryId]);
+    });
   }
 
   async clearCategoryByCategoryId(categoryId: number): Promise<void> {

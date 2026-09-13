@@ -33,6 +33,7 @@ export class DatabaseManager {
     // カテゴリテーブルを先に作成（外部キー制約のため）
     await this.categoryRepository.initializeTable();
     await this.itemRepository.initializeTable();
+    await this.itemRepository.initializeCompletionsTable();
   }
 
   async clearAll(): Promise<void> {

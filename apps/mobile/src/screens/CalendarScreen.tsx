@@ -1,3 +1,5 @@
+import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
+import { useItemCompletions } from "../hooks/useItemCompletions";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -139,6 +141,7 @@ const CalendarScreen = () => {
   const monthGrid = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
   const todayKey = createDateKey(new Date());
   const selectedDateKey = createDateKey(selectedDate);
+  const completions = useItemCompletions(selectedDateKey);
   const selectedItems = useMemo(() => {
     const result: SavedItem[] = [];
     const sel = startOfDay(selectedDate);
@@ -400,10 +403,16 @@ const CalendarScreen = () => {
                       <View key={item.id} style={styles.scheduleCard}>
                         <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
                         <View style={styles.scheduleTaskRow}>
+                          <CompletionCheckbox
+                            text={item.text}
+                            completed={completions.completedIds.has(item.id)}
+                            disabled={completions.disabled}
+                            onPress={() => void completions.toggleCompletion(item.id)}
+                          />
                           <Text style={[styles.scheduleTime, { color: taskColor }]}>
                             {formatScheduleTime(item)}
                           </Text>
-                          <Text style={styles.scheduleText}>{item.text}</Text>
+                          <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                         </View>
                         {isRange && item.startDate && item.endDate ? (
                           <Text style={localStyles.rangeDateText}>
@@ -445,10 +454,16 @@ const CalendarScreen = () => {
                           ]}
                         >
                           <View style={styles.scheduleTaskRow}>
+                            <CompletionCheckbox
+                              text={item.text}
+                              completed={completions.completedIds.has(item.id)}
+                              disabled={completions.disabled}
+                              onPress={() => void completions.toggleCompletion(item.id)}
+                            />
                             <Text style={[styles.scheduleTime, { color: taskColor }]}>
                               {formatScheduleTime(item)}
                             </Text>
-                            <Text style={styles.scheduleText}>{item.text}</Text>
+                            <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                           </View>
                           {isRange && item.startDate && item.endDate ? (
                             <Text style={localStyles.rangeDateText}>
@@ -470,11 +485,17 @@ const CalendarScreen = () => {
                   <View key={item.id} style={styles.scheduleCard}>
                     <View style={[styles.scheduleCardAccent, { backgroundColor: taskColor }]} />
                     <View style={styles.scheduleTaskRow}>
+                      <CompletionCheckbox
+                        text={item.text}
+                        completed={completions.completedIds.has(item.id)}
+                        disabled={completions.disabled}
+                        onPress={() => void completions.toggleCompletion(item.id)}
+                      />
                       <View style={styles.chronologicalTaskContent}>
                         <Text style={[styles.scheduleTime, { color: taskColor }]}>
                           {formatScheduleTime(item)}
                         </Text>
-                        <Text style={styles.scheduleText}>{item.text}</Text>
+                        <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                         {isRange && item.startDate && item.endDate ? (
                           <Text style={localStyles.rangeDateText}>
                             {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}

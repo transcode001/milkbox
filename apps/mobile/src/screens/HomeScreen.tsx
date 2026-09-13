@@ -1,3 +1,5 @@
+import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
+import { useItemCompletions } from "../hooks/useItemCompletions";
 import { useCallback, useRef, useState } from "react";
 import {
   View,
@@ -97,6 +99,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
+  const completions = useItemCompletions();
 
   const loadItems = useCallback(async () => {
     // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
@@ -595,12 +598,23 @@ const HomeScreen = ({ navigation }: Props) => {
               </View>
             );
           }}
+          // renderItemはメモ化していないインラインの関数なので、completionsが更新されて
+          // HomeScreenが再レンダーされるたびに新しい関数として渡され、SectionListの各セルは
+          // それだけで再描画される(=extraDataは不要)。もしrenderItemをuseCallbackで
+          // メモ化するようになったら、completionsの更新をセルへ伝えるためにextraDataの
+          // 指定を復活させること。
           renderItem={({ item }) => {
             const dateTimeRange = formatItemDateTimeRange(item);
 
             return (
               <Swipeable renderRightActions={() => renderRightActions(item.id)}>
                 <View style={styles.itemContainer}>
+                  <CompletionCheckbox
+                    text={item.text}
+                    completed={completions.completedIds.has(item.id)}
+                    disabled={completions.disabled}
+                    onPress={() => void completions.toggleCompletion(item.id)}
+                  />
                   <TouchableOpacity
                     style={styles.itemEditButton}
                     onPress={() => openItemEditor(item)}
@@ -617,7 +631,7 @@ const HomeScreen = ({ navigation }: Props) => {
                           { backgroundColor: item.color || DEFAULT_COLORS.task },
                         ]}
                       />
-                      <Text style={styles.itemText}>{item.text}</Text>
+                      <Text style={[styles.itemText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                       {hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
                       ) : null}
