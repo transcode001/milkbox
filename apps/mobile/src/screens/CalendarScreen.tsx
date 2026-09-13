@@ -1,3 +1,4 @@
+import { WeekTimeline } from "../components/WeekTimeline";
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
 import { useItemCompletions } from "../hooks/useItemCompletions";
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -55,6 +56,8 @@ function getWeekdayTint(dayOfWeek: number): string {
 }
 
 const CalendarScreen = () => {
+  const [viewMode, setViewMode] = useState<"month" | "week">("month");
+  const [dayCount, setDayCount] = useState<1 | 3 | 7>(7);
   const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [scheduleDisplayMode, setScheduleDisplayMode] = useState<"category" | "time">("category");
@@ -138,7 +141,12 @@ const CalendarScreen = () => {
     };
   }, [items]);
 
-  const monthGrid = useMemo(() => buildMonthGrid(visibleMonth), [visibleMonth]);
+  // week表示中はmonthGridを使わないため、月をまたぐ週送り(visibleMonthの更新)の
+  // たびに無駄な6x7の日付行列を組み立てないよう、必要な時だけ計算する。
+  const monthGrid = useMemo(
+    () => (viewMode === "month" ? buildMonthGrid(visibleMonth) : []),
+    [visibleMonth, viewMode],
+  );
   const todayKey = createDateKey(new Date());
   const selectedDateKey = createDateKey(selectedDate);
   const completions = useItemCompletions(selectedDateKey);
@@ -188,6 +196,41 @@ const CalendarScreen = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <View style={localStyles.topToggleRow}>
+        {viewMode === "week" ? (
+          <View style={[styles.scheduleDisplayToggle, localStyles.topToggleHalf]} accessibilityRole="radiogroup">
+            {([1, 3, 7] as const).map((count) => (
+              <Pressable key={count}
+                style={[styles.scheduleDisplayToggleButton, localStyles.topToggleButton, dayCount === count && styles.scheduleDisplayToggleButtonSelected]}
+                accessibilityRole="radio"
+                accessibilityLabel={count === 7 ? "週間表示" : `${count}日表示`}
+                accessibilityState={{ selected: dayCount === count }}
+                onPress={() => setDayCount(count)}>
+                <Text style={[styles.scheduleDisplayToggleText, dayCount === count && styles.scheduleDisplayToggleTextSelected]}>
+                  {count === 7 ? "週間" : `${count}日`}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : (
+          // 月表示中は日数切り替えが意味を持たないため空欄にするが、モード切り替え側の
+          // 位置がズレないよう幅だけは同じ比率で確保する(Figma上も月表示時は空欄)。
+          <View style={localStyles.topToggleHalf} />
+        )}
+        <View style={[styles.scheduleDisplayToggle, localStyles.topToggleHalf]} accessibilityRole="radiogroup">
+          {(["week", "month"] as const).map((mode) => (
+            <Pressable key={mode}
+              style={[styles.scheduleDisplayToggleButton, localStyles.topToggleButton, viewMode === mode && styles.scheduleDisplayToggleButtonSelected]}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: viewMode === mode }}
+              onPress={() => setViewMode(mode)}>
+              <Text style={[styles.scheduleDisplayToggleText, viewMode === mode && styles.scheduleDisplayToggleTextSelected]}>
+                {mode === "week" ? "週間" : "カレンダー"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
       {loading ? (
         <View style={localStyles.stateContainer}>
           <ActivityIndicator size="large" />
@@ -196,6 +239,14 @@ const CalendarScreen = () => {
         <View style={localStyles.stateContainer}>
           <Text style={localStyles.stateText}>{errorMessage}</Text>
         </View>
+      ) : viewMode === "week" ? (
+        <WeekTimeline items={items} selectedDate={selectedDate} dayCount={dayCount}
+          onSelectDate={(date) => {
+            setSelectedDate(startOfDay(date));
+            setVisibleMonth(startOfDay(date));
+          }}
+          getWeekdayTint={getWeekdayTint}
+        />
       ) : (
         <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
@@ -245,12 +296,15 @@ const CalendarScreen = () => {
                           <Text
                             style={[
                               styles.dayNumber,
+                              // 当月外の土日はdayNumberMuted(textSecondary)を優先させたいが、
+                              // 配列の後勝ちで週末の色付けが上書きしてしまわないよう、
+                              // isCurrentMonthの時だけ週末色を適用する。
+                              isCurrentMonth && !isSelected && !isToday
+                                && (date.getDay() === 0 || date.getDay() === 6)
+                                && { color: getWeekdayTint(date.getDay()) },
                               !isCurrentMonth && styles.dayNumberMuted,
                               isSelected && styles.dayNumberSelected,
                               isToday && !isSelected && styles.dayNumberToday,
-                              !isSelected && !isToday
-                                && (date.getDay() === 0 || date.getDay() === 6)
-                                && { color: getWeekdayTint(date.getDay()) },
                             ]}
                           >
                             {date.getDate()}
@@ -524,6 +578,24 @@ const CalendarScreen = () => {
 };
 
 const localStyles = StyleSheet.create({
+  // Figma上、日数切り替え(1日/3日/週間)と表示モード切り替え(週間/カレンダー)は
+  // 同じ行に横並び(各半分幅)になっている。以前は別々の行だった。
+  topToggleRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  topToggleHalf: {
+    flex: 1,
+    minWidth: 0,
+  },
+  // 共通ボタンの最小幅を解除し、各グループ内の幅に収める。
+  topToggleButton: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 4,
+  },
   stateContainer: {
     flex: 1,
     alignItems: "center",

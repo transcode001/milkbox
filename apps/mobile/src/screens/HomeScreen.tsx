@@ -1,4 +1,5 @@
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
+import { UndoSnackbar } from "../components/UndoSnackbar";
 import { useItemCompletions } from "../hooks/useItemCompletions";
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -49,6 +50,9 @@ type Props = CompositeScreenProps<
 // textSecondary(#666)どちらのトークンとも一致しないためそのまま踏襲している。
 const NOTIFICATION_ENABLED_COLOR = "#333";
 
+// スワイプ削除後、実際にDBから消すまでUndoできる猶予時間。
+const DELETE_UNDO_TIMEOUT_MS = 5000;
+
 // utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
 // あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
 // といったカレンダー表示向けの正規化を行うのに対し、ここはサブタスク編集
@@ -95,6 +99,10 @@ const HomeScreen = ({ navigation }: Props) => {
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
   const completions = useItemCompletions();
+  // スワイプ削除の対象。DBからは即座に消さず、この猶予期間だけ一覧から隠して
+  // Undoできるようにする(visibleSectionsで実際のフィルタを行う)。
+  const [pendingDelete, setPendingDelete] = useState<SavedItem | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadItems = useCallback(async () => {
     // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
@@ -131,13 +139,56 @@ const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("AddTask");
   };
 
-  const handleDeleteItem = async (id: number) => {
+  // Undoされなかった保留中削除を実際にDBへ反映する。失敗時は一覧を再読み込みして
+  // (隠されたままになっていた)アイテムを正しい状態に戻す。
+  const finalizeDelete = useCallback(async (item: SavedItem) => {
     try {
-      await dbManager.deleteItem(id);
-      await loadItems();
+      await dbManager.deleteItem(item.id);
+      // 削除確定後はpendingDeleteによる一時的な非表示フィルタが外れる(タイマー発火時に
+      // pendingDeleteをnullにする、または次の削除でpendingDeleteが別アイテムに切り替わる)
+      // ため、実データ(sections)側からもここで取り除く。取り除かないと確定削除された
+      // アイテムが一覧に復活して見えてしまう。
+      setSections((current) =>
+        current
+          .map((section) => ({
+            ...section,
+            data: section.data.filter((sectionItem) => sectionItem.id !== item.id),
+          }))
+          .filter((section) => section.data.length > 0),
+      );
     } catch {
       Alert.alert("エラー", "タスクの削除に失敗しました");
+      await loadItems();
     }
+  }, [dbManager, loadItems]);
+
+  const clearPendingDeleteTimer = () => {
+    if (pendingDeleteTimerRef.current) {
+      clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = null;
+    }
+  };
+
+  // スナックバーは常に直近1件だけを表示する単純な設計。既に保留中の削除がある状態で
+  // 別のアイテムを削除した場合、前のものは猶予を待たずにすぐ確定させる。
+  const requestDeleteItem = (item: SavedItem) => {
+    const previous = pendingDelete;
+    clearPendingDeleteTimer();
+    setPendingDelete(item);
+    pendingDeleteTimerRef.current = setTimeout(() => {
+      pendingDeleteTimerRef.current = null;
+      setPendingDelete((current) => (current?.id === item.id ? null : current));
+      void finalizeDelete(item);
+    }, DELETE_UNDO_TIMEOUT_MS);
+
+    if (previous && previous.id !== item.id) {
+      void finalizeDelete(previous);
+    }
+  };
+
+  const handleUndoDelete = () => {
+    clearPendingDeleteTimer();
+    setPendingDelete(null);
   };
 
   const handleToggleItemNotification = async (item: SavedItem) => {
@@ -295,12 +346,10 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
-  const renderRightActions = (id: number) => (
+  const renderRightActions = (item: SavedItem) => (
     <TouchableOpacity
       style={styles.deleteAction}
-      onPress={() => {
-        void handleDeleteItem(id);
-      }}
+      onPress={() => requestDeleteItem(item)}
       activeOpacity={0.8}
     >
       <Text style={styles.deleteActionText}>削除</Text>
@@ -356,15 +405,23 @@ const HomeScreen = ({ navigation }: Props) => {
     const category = categories.find((candidate) => candidate.id === categoryId);
     const collapsed = collapsedSectionKeys.has(key);
     // 閉じてもカテゴリ情報と曜日表示を失わないよう、元のdataからメタデータを保持する。
+    // 保留中削除のアイテムはUndo猶予の間、実データ(sections)には残したまま
+    // 表示だけ隠す。loadItems()がフォーカス復帰等で再実行されて元データが
+    // 更新されても、pendingDeleteが残っていれば引き続き非表示にできる。
+    const data = collapsed
+      ? []
+      : pendingDelete
+        ? section.data.filter((item) => item.id !== pendingDelete.id)
+        : section.data;
     return {
       ...section,
       key,
       categoryId,
       weekdayLabels: formatCategoryWeekdays(section, category),
       collapsed,
-      data: collapsed ? [] : section.data,
+      data,
     };
-  }), [sections, categories, collapsedSectionKeys]);
+  }), [sections, categories, collapsedSectionKeys, pendingDelete]);
 
   const toggleSection = (key: string) => {
     setCollapsedSectionKeys((current) => {
@@ -582,7 +639,7 @@ const HomeScreen = ({ navigation }: Props) => {
             const dateTimeRange = formatItemDateTimeRange(item);
 
             return (
-              <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+              <Swipeable renderRightActions={() => renderRightActions(item)}>
                 <View style={styles.itemContainer}>
                   <CompletionCheckbox
                     text={item.text}
@@ -639,6 +696,12 @@ const HomeScreen = ({ navigation }: Props) => {
           }}
         />
       )}
+      {pendingDelete ? (
+        <UndoSnackbar
+          message={`「${pendingDelete.text}」を削除しました`}
+          onAction={handleUndoDelete}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

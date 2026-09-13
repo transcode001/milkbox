@@ -53,6 +53,7 @@ const TabNavigator = () => (
       component={CalendarScreen}
       options={{
         title: "カレンダー",
+        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <Image
             source={calendarIcon}
