@@ -217,7 +217,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled: reminder.notificationEnabled,
         notificationMinutesBefore: reminder.notificationMinutesBefore,
-        color: taskColor,
+        color: noCategoryChecked ? taskColor : DEFAULT_COLORS.task,
       });
 
       setText("");
@@ -422,14 +422,16 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
-                  <View style={styles.colorPickerContainer}>
-                    <Text style={styles.dateLabel}>タスクの色</Text>
-                    <ColorPicker
-                      value={taskColor}
-                      defaultColor={DEFAULT_COLORS.task}
-                      onChange={setTaskColor}
-                    />
-                  </View>
+                  {noCategoryChecked ? (
+                    <View style={styles.colorPickerContainer}>
+                      <Text style={styles.dateLabel}>タスクの色</Text>
+                      <ColorPicker
+                        value={taskColor}
+                        defaultColor={DEFAULT_COLORS.task}
+                        onChange={setTaskColor}
+                      />
+                    </View>
+                  ) : null}
 
                   <View style={styles.dateRow}>
                     <View>

@@ -126,14 +126,15 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
+  // FigmaのSwipe Delete Row(327:163)に合わせて、行の高さいっぱい・角丸なし・
+  // 余白なしのボタンにする(以前は浮いたピル型だったが、スワイプで隠れていた
+  // 部分がそのまま露出する見た目に変更)。
   deleteAction: {
-    width: 84,
+    width: 64,
     height: "100%",
     backgroundColor: colors.destructive,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radii.md,
-    marginVertical: 4,
   },
   deleteActionText: {
     color: colors.onPrimary,

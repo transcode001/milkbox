@@ -2,7 +2,7 @@
 // 色付けするか」を扱うユーティリティ。日付そのものの計算は calendarDates.ts
 // に委譲し、ここでは SavedItem を前提にしたロジックだけを持つ。
 import type { SavedItem } from "@milkbox/shared";
-import { parseItemDate, parsePointDate } from "./calendarDates";
+import { parseItemDate } from "./calendarDates";
 import { parseWeekdays } from "./weekdays";
 
 // 表示色はカテゴリの色(categoryColor)を優先し、カテゴリ未設定のタスクだけ
@@ -37,7 +37,7 @@ export function formatScheduleTime(item: SavedItem): string {
   return formatTimeOfDay(item.date) ?? "終日";
 }
 
-export function isMultiDayRange(item: SavedItem): boolean {
+export function isMultiDayRange(item: Pick<SavedItem, "startDate" | "endDate">): boolean {
   if (!item.startDate || !item.endDate) return false;
   const s = parseItemDate(item.startDate);
   const e = parseItemDate(item.endDate);
@@ -55,11 +55,16 @@ export const UNCATEGORIZED_KEY = "__uncategorized__";
 export const UNCATEGORIZED_LABEL = "カテゴリ指定なし";
 
 const getScheduleTimeValue = (item: SavedItem): number => {
-  // 曜日繰り返しタスクのdateは実際の発生時刻ではなく作成時刻(formatScheduleTime
-  // 参照)なので、それをソートキーに使うと無関係な時刻順になってしまう。
-  // 終日イベント扱いとして常に先頭に来るよう -Infinity を返す。
-  if (parseWeekdays(item.weekdays).length > 0) return -Infinity;
-  return parsePointDate(item.startDate ?? item.endDate ?? item.date)?.getTime() ?? 0;
+  // formatScheduleTime と同じ優先順で表示時刻を選ぶ。
+  // 繰り返しタスクの保存日付や作成時刻ではなく、端末の時・分で比較する。
+  const value = [
+    item.startDate,
+    item.endDate,
+    ...(parseWeekdays(item.weekdays).length > 0 ? [] : [item.date]),
+  ].find((candidate) => formatTimeOfDay(candidate) !== null);
+  if (!value) return -Infinity;
+  const date = new Date(value);
+  return date.getHours() * 60 + date.getMinutes();
 };
 
 export function sortScheduleItemsByTime(items: SavedItem[]): SavedItem[] {

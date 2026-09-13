@@ -100,6 +100,32 @@ describe("groupScheduleItems", () => {
 });
 
 describe("sortScheduleItemsByTime", () => {
+  const repeatingItems: SavedItem[] = [
+    { ...baseItem, id: 1, categoryId: 10, weekdays: "[0,1,2,3,4,5,6]", startDate: "2026-01-01T15:00:00" },
+    { ...baseItem, id: 2, categoryId: 20, startDate: "2026-01-06T10:00:00" },
+    { ...baseItem, id: 3, categoryId: 10, weekdays: "[0,1,2,3,4,5,6]", startDate: "2026-02-01T09:00:00" },
+    { ...baseItem, id: 4, categoryId: 10, weekdays: "[0,1,2,3,4,5,6]", endDate: "2026-03-01T12:00:00" },
+    { ...baseItem, id: 5, categoryId: 10, weekdays: "[0,1,2,3,4,5,6]" },
+  ];
+
+  it("sorts timed repeating tasks with other tasks by displayed time, ignoring stored dates", () => {
+    expect(sortScheduleItemsByTime(repeatingItems).map((item) => item.id)).toEqual([5, 3, 2, 4, 1]);
+  });
+
+  it("sorts timed repeating tasks within each category", () => {
+    expect(groupScheduleItems(repeatingItems).find((group) => group.key === "10")?.items.map((item) => item.id))
+      .toEqual([5, 3, 4, 1]);
+  });
+
+  it("uses the displayed end time when the start has no valid time", () => {
+    const items = [
+      { ...baseItem, id: 1, startDate: "2026-01-06", endDate: "2026-01-06T12:00:00" },
+      { ...baseItem, id: 2, startDate: "invalidT00:00:00", endDate: "2026-01-06T09:00:00" },
+      { ...baseItem, id: 3, date: "2026-01-06" },
+    ];
+    expect(sortScheduleItemsByTime(items).map((item) => item.id)).toEqual([3, 2, 1]);
+  });
+
   it("orders tasks across categories by time without mutating the input", () => {
     const items = [
       { ...baseItem, id: 1, categoryId: 10, startDate: "2026-01-06T15:00:00" },

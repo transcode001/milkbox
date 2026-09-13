@@ -32,6 +32,7 @@ import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { parseItemDate, startOfDay } from "../utils/calendarDates";
 import { DEFAULT_COLORS } from "../constants/colors";
 import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
 import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
@@ -231,7 +232,7 @@ const HomeScreen = ({ navigation }: Props) => {
     if (!editingCategory) return;
     const trimmedName = editCategoryName.trim();
     if (!trimmedName) {
-      Alert.alert("Error", "カテゴリ名を入力してください");
+      Alert.alert("エラー", "カテゴリ名を入力してください");
       return;
     }
 
@@ -250,7 +251,7 @@ const HomeScreen = ({ navigation }: Props) => {
       await loadItems();
       Alert.alert("完了", "カテゴリ内容を変更しました");
     } catch {
-      Alert.alert("エラー", "タスクの更新に失敗しました");
+      Alert.alert("エラー", "カテゴリの更新に失敗しました");
     }
   };
 
@@ -353,7 +354,7 @@ const HomeScreen = ({ navigation }: Props) => {
     </TouchableOpacity>
   );
 
-  const formatItemDateTime = (value?: string) => {
+  const formatItemDateTime = (value?: string, timeOnly = false) => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "-";
@@ -362,18 +363,31 @@ const HomeScreen = ({ navigation }: Props) => {
     const day = String(date.getDate()).padStart(2, "0");
     const hour = String(date.getHours()).padStart(2, "0");
     const minute = String(date.getMinutes()).padStart(2, "0");
+    if (timeOnly) return `${hour}:${minute}`;
     return `${year}.${month}.${day} ${hour}:${minute}`;
   };
 
-  const formatItemDateTimeRange = (item: { startDate?: string; endDate?: string }) => {
+  // カテゴリ付きタスクはAddTaskScreen側の登録時、日付部分が常に「今日」で
+  // 埋まる(曜日+時刻の繰り返しが本体で、日付自体に意味がないため)。一方
+  // HomeScreenの編集モーダルはカテゴリの有無を問わず任意の日付を設定できるので、
+  // 開始/終了のどちらかが「今日」以外の日付になっていれば、それはユーザーが
+  // 意図的に設定した実際の日付とみなして表示する。
+  const hasMeaningfulDate = (value?: string) => {
+    const parsed = value ? parseItemDate(value) : null;
+    return parsed !== null && parsed.getTime() !== startOfDay(new Date()).getTime();
+  };
+
+  const formatItemDateTimeRange = (item: Pick<SavedItem, "startDate" | "endDate" | "categoryId">) => {
+    const timeOnly =
+      item.categoryId != null && !hasMeaningfulDate(item.startDate) && !hasMeaningfulDate(item.endDate);
     if (item.startDate && item.endDate) {
-      return `${formatItemDateTime(item.startDate)} ～ ${formatItemDateTime(item.endDate)}`;
+      return `${formatItemDateTime(item.startDate, timeOnly)} ～ ${formatItemDateTime(item.endDate, timeOnly)}`;
     }
     if (item.startDate) {
-      return `${formatItemDateTime(item.startDate)} ～`;
+      return `${formatItemDateTime(item.startDate, timeOnly)} ～`;
     }
     if (item.endDate) {
-      return `～ ${formatItemDateTime(item.endDate)}`;
+      return `～ ${formatItemDateTime(item.endDate, timeOnly)}`;
     }
     return null;
   };
