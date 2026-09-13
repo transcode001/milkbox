@@ -1,6 +1,6 @@
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
 import { useItemCompletions } from "../hooks/useItemCompletions";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -28,6 +28,7 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
+import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { SelectModal } from "../components/SelectModal";
@@ -79,6 +80,7 @@ const formatCategoryWeekdays = (section: CategorySection, category?: Category): 
 
 const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
+  const [collapsedSectionKeys, setCollapsedSectionKeys] = useState<Set<string>>(() => new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -400,6 +402,32 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
+  const visibleSections = useMemo(() => sections.map((section) => {
+    const categoryId = section.data[0]?.categoryId;
+    const key = categoryId != null ? String(categoryId) : UNCATEGORIZED_KEY;
+    const category = categories.find((candidate) => candidate.id === categoryId);
+    const collapsed = collapsedSectionKeys.has(key);
+    // 閉じても編集対象と曜日表示を失わないよう、元のdataからメタデータを保持する。
+    return {
+      ...section,
+      key,
+      categoryId,
+      weekdayLabels: formatCategoryWeekdays(section, category),
+      collapsed,
+      data: collapsed ? [] : section.data,
+    };
+  }), [sections, categories, collapsedSectionKeys]);
+
+  const toggleSection = (key: string) => {
+    setCollapsedSectionKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
       <CategoryEditorModal
@@ -568,13 +596,12 @@ const HomeScreen = ({ navigation }: Props) => {
         </View>
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => {
-            const categoryId = section.data[0]?.categoryId;
-            const category = categoryId ? categoryById.get(categoryId) : undefined;
-            const weekdayLabels = formatCategoryWeekdays(section, category);
+            const category = section.categoryId != null ? categoryById.get(section.categoryId) : undefined;
+            const weekdayLabels = section.weekdayLabels;
             const headerContent = (
               <>
                 <Text style={styles.sectionHeaderText}>{section.title}</Text>
@@ -584,17 +611,35 @@ const HomeScreen = ({ navigation }: Props) => {
               </>
             );
 
-            return category ? (
-              <TouchableOpacity
-                style={styles.sectionHeader}
-                onPress={() => openCategoryEditor(category)}
-                activeOpacity={0.8}
-              >
-                {headerContent}
-              </TouchableOpacity>
-            ) : (
+            return (
               <View style={styles.sectionHeader}>
-                {headerContent}
+                {category ? (
+                  <TouchableOpacity
+                    style={styles.sectionHeaderContent}
+                    onPress={() => openCategoryEditor(category)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${section.title}を編集`}
+                  >
+                    {headerContent}
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.sectionHeaderContent}>{headerContent}</View>
+                )}
+                <TouchableOpacity
+                  style={styles.sectionToggle}
+                  onPress={() => toggleSection(section.key)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${section.title}を${section.collapsed ? "展開" : "折りたたむ"}`}
+                  accessibilityState={{ expanded: !section.collapsed }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={section.collapsed ? "chevron-forward" : "chevron-down"}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </TouchableOpacity>
               </View>
             );
           }}

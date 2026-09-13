@@ -24,11 +24,22 @@ export const styles = StyleSheet.create({
     flexDirection: "column",
     gap: 12,
   },
-  dateControlRow: {
+  // 「開始」「終了」ラベルは以前は行の上に積んでいたが、Figmaの更新でコントロール行と
+  // 同じ行の左側に並ぶ配置に変わったため、ラベル+コントロール行をまとめて横並びにする。
+  dateFieldRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    marginBottom: 8,
+  },
+  dateFieldLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  dateControlRow: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   dateSelectorButton: {
     flex: 1,

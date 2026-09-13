@@ -439,8 +439,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
                   ) : null}
 
                   <View style={styles.dateRow}>
-                    <View>
-                      <Text style={styles.dateLabel}>開始</Text>
+                    <View style={styles.dateFieldRow}>
+                      <Text style={styles.dateFieldLabel}>開始</Text>
                       <View style={styles.dateControlRow}>
                         {noCategoryChecked ? (
                           <TouchableOpacity
@@ -469,8 +469,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
                         </TouchableOpacity>
                       </View>
                     </View>
-                    <View>
-                      <Text style={styles.dateLabel}>終了</Text>
+                    <View style={styles.dateFieldRow}>
+                      <Text style={styles.dateFieldLabel}>終了</Text>
                       <View style={styles.dateControlRow}>
                         {noCategoryChecked ? (
                           <TouchableOpacity

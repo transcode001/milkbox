@@ -63,6 +63,20 @@ export const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8,
   },
+  sectionHeaderContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 44,
+  },
+  sectionToggle: {
+    width: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   sectionHeaderText: {
     flexShrink: 1,
     fontSize: 16,
