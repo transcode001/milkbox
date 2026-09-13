@@ -38,6 +38,7 @@ const TabNavigator = () => (
       component={HomeScreen}
       options={{
         title: "ホーム",
+        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <Image
             source={homeIcon}
