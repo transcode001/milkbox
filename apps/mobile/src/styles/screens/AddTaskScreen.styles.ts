@@ -1,22 +1,6 @@
 import { StyleSheet } from "react-native";
 import { colors, radii, spacing } from "../tokens";
 
-// checkbox/checkboxMutedの共通レイアウト部分。枠線色・太さだけがFigma上で
-// チェックボックスごとに違うため、ここに切り出して2つの完結したスタイルとして
-// 定義する(以前は[styles.checkbox, styles.notificationCheckbox]という配列合成で
-// 上書きしていたが、配列の順序に依存する壊れやすい構成だったため単純化した)。
-const checkboxBase = {
-  width: 20,
-  height: 20,
-  // radii.smはボタン用トークンでAndroidでは20(=このボックスの半径)になり円形化してしまうため、
-  // 固定サイズのチェックボックスには使わず控えめな角丸を直接指定する。
-  borderRadius: 4,
-  alignItems: "center",
-  justifyContent: "center",
-  marginRight: 8,
-  backgroundColor: colors.background,
-} as const;
-
 export const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -137,17 +121,17 @@ export const styles = StyleSheet.create({
     marginBottom: 8,
   },
   checkbox: {
-    ...checkboxBase,
+    width: 20,
+    height: 20,
+    // radii.smはボタン用トークンでAndroidでは20(=このボックスの半径)になり円形化してしまうため、
+    // 固定サイズのチェックボックスには使わず控えめな角丸を直接指定する。
+    borderRadius: 4,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+    backgroundColor: colors.background,
     borderWidth: 1,
     borderColor: "#888",
-  },
-  // Figma上で「通知を設定しない」チェックボックスだけ枠線が他(#888/1px)より
-  // 薄く太い(#bfbfbf/1.5px)。checkboxとの差分をarray合成で上書きするのではなく、
-  // それぞれ単体で使い切れる完結したスタイルとして定義する。
-  checkboxMuted: {
-    ...checkboxBase,
-    borderWidth: 1.5,
-    borderColor: "#bfbfbf",
   },
   checkboxChecked: {
     backgroundColor: colors.primary,
@@ -165,6 +149,14 @@ export const styles = StyleSheet.create({
   reminderContainer: {
     marginTop: 8,
     marginBottom: 8,
+  },
+  notificationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  notificationDropdown: {
+    flex: 1,
   },
   buttonText: {
     color: colors.onPrimary,
