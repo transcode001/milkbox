@@ -30,7 +30,6 @@ import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
-import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
@@ -84,12 +83,6 @@ const HomeScreen = ({ navigation }: Props) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [editingCategory, setEditingCategory] = useState<{
-    id: number;
-  } | null>(null);
-  const [editCategoryName, setEditCategoryName] = useState("");
-  const [editCategoryWeekdays, setEditCategoryWeekdays] = useState<number[]>([]);
-  const [editCategoryColor, setEditCategoryColor] = useState<string>(DEFAULT_COLORS.category);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
@@ -202,16 +195,6 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
-  const openCategoryEditor = (category: Category) => {
-    const weekdays = parseWeekdays(category.weekdays);
-    setEditingCategory({
-      id: category.id,
-    });
-    setEditCategoryName(category.name);
-    setEditCategoryWeekdays(weekdays);
-    setEditCategoryColor(category.color);
-  };
-
   const openItemEditor = (item: SavedItem) => {
     setEditingItem(item);
     setEditItemText(item.text);
@@ -223,41 +206,6 @@ const HomeScreen = ({ navigation }: Props) => {
     // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
     // notificationMinutesBefore自体を見て復元用の値を決める。
     itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
-  };
-
-  const toggleEditCategoryWeekday = (weekday: number) => {
-    setEditCategoryWeekdays((current) =>
-      current.includes(weekday)
-        ? current.filter((value) => value !== weekday)
-        : [...current, weekday].sort((left, right) => left - right),
-    );
-  };
-
-  const handleUpdateCategory = async () => {
-    if (!editingCategory) return;
-    const trimmedName = editCategoryName.trim();
-    if (!trimmedName) {
-      Alert.alert("エラー", "カテゴリ名を入力してください");
-      return;
-    }
-
-    try {
-      await dbManager.updateCategory(
-        editingCategory.id,
-        trimmedName,
-        editCategoryWeekdays.length > 0
-          ? JSON.stringify(editCategoryWeekdays)
-          : null,
-        undefined,
-        undefined,
-        editCategoryColor,
-      );
-      setEditingCategory(null);
-      await loadItems();
-      Alert.alert("完了", "カテゴリ内容を変更しました");
-    } catch {
-      Alert.alert("エラー", "カテゴリの更新に失敗しました");
-    }
   };
 
   const handleUpdateItem = async () => {
@@ -407,7 +355,7 @@ const HomeScreen = ({ navigation }: Props) => {
     const key = categoryId != null ? String(categoryId) : UNCATEGORIZED_KEY;
     const category = categories.find((candidate) => candidate.id === categoryId);
     const collapsed = collapsedSectionKeys.has(key);
-    // 閉じても編集対象と曜日表示を失わないよう、元のdataからメタデータを保持する。
+    // 閉じてもカテゴリ情報と曜日表示を失わないよう、元のdataからメタデータを保持する。
     return {
       ...section,
       key,
@@ -430,19 +378,6 @@ const HomeScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <CategoryEditorModal
-        visible={editingCategory !== null}
-        mode="edit"
-        name={editCategoryName}
-        weekdays={editCategoryWeekdays}
-        color={editCategoryColor}
-        onChangeName={setEditCategoryName}
-        onToggleWeekday={toggleEditCategoryWeekday}
-        onChangeColor={setEditCategoryColor}
-        onCancel={() => setEditingCategory(null)}
-        onSave={() => void handleUpdateCategory()}
-      />
-
       <Modal
         visible={editingItem !== null}
         transparent={true}
@@ -602,9 +537,16 @@ const HomeScreen = ({ navigation }: Props) => {
           renderSectionHeader={({ section }) => {
             const category = section.categoryId != null ? categoryById.get(section.categoryId) : undefined;
             const weekdayLabels = section.weekdayLabels;
+            // Figmaの更新で、タスク単位の色ドットではなくカテゴリ単位で1つだけ
+            // ヘッダーに表示する形になった。指定なし(未分類)セクションは特定の
+            // カテゴリ色を持たないため、中間グレー(colors.tabInactive)を使う。
+            const sectionColor = category ? category.color : colors.tabInactive;
             const headerContent = (
               <>
-                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                <View style={styles.sectionCategoryLabel}>
+                  <View style={[styles.sectionColorIndicator, { backgroundColor: sectionColor }]} />
+                  <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                </View>
                 {weekdayLabels ? (
                   <Text style={styles.sectionWeekdays}>{weekdayLabels}</Text>
                 ) : null}
@@ -612,35 +554,23 @@ const HomeScreen = ({ navigation }: Props) => {
             );
 
             return (
-              <View style={styles.sectionHeader}>
-                {category ? (
-                  <TouchableOpacity
-                    style={styles.sectionHeaderContent}
-                    onPress={() => openCategoryEditor(category)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${section.title}を編集`}
-                  >
-                    {headerContent}
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.sectionHeaderContent}>{headerContent}</View>
-                )}
-                <TouchableOpacity
-                  style={styles.sectionToggle}
-                  onPress={() => toggleSection(section.key)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${section.title}を${section.collapsed ? "展開" : "折りたたむ"}`}
-                  accessibilityState={{ expanded: !section.collapsed }}
-                  activeOpacity={0.8}
-                >
+              <TouchableOpacity
+                style={styles.sectionHeader}
+                onPress={() => toggleSection(section.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`${section.title}を${section.collapsed ? "展開" : "折りたたむ"}`}
+                accessibilityState={{ expanded: !section.collapsed }}
+                activeOpacity={0.8}
+              >
+                <View style={styles.sectionHeaderContent}>{headerContent}</View>
+                <View style={styles.sectionToggle}>
                   <Ionicons
-                    name={section.collapsed ? "chevron-forward" : "chevron-down"}
+                    name={section.collapsed ? "chevron-down" : "chevron-up"}
                     size={20}
                     color={colors.textSecondary}
                   />
-                </TouchableOpacity>
-              </View>
+                </View>
+              </TouchableOpacity>
             );
           }}
           // renderItemはメモ化していないインラインの関数なので、completionsが更新されて
@@ -670,12 +600,16 @@ const HomeScreen = ({ navigation }: Props) => {
                     activeOpacity={0.8}
                   >
                     <View style={styles.itemMainRow}>
-                      <View
-                        style={[
-                          styles.itemColorIndicator,
-                          { backgroundColor: item.color || DEFAULT_COLORS.task },
-                        ]}
-                      />
+                      {/* カテゴリ付きタスクは色をセクションヘッダー側に1つだけ表示するため、
+                          タスク行ではドットを出さない。未分類タスクだけタスクごとの色を残す。 */}
+                      {item.categoryId == null ? (
+                        <View
+                          style={[
+                            styles.itemColorIndicator,
+                            { backgroundColor: item.color || DEFAULT_COLORS.task },
+                          ]}
+                        />
+                      ) : null}
                       <Text style={[styles.itemText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                       {hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
