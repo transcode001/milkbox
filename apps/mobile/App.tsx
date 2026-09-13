@@ -38,6 +38,7 @@ const TabNavigator = () => (
       component={HomeScreen}
       options={{
         title: "ホーム",
+        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <Image
             source={homeIcon}
@@ -52,6 +53,7 @@ const TabNavigator = () => (
       component={CalendarScreen}
       options={{
         title: "カレンダー",
+        headerShown: false,
         tabBarIcon: ({ color, size }) => (
           <Image
             source={calendarIcon}

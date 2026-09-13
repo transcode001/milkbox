@@ -134,6 +134,7 @@ export const styles = StyleSheet.create({
   },
   todayButtonText: {
     color: colors.primary,
+    fontSize: 14,
     fontWeight: "600",
   },
   scheduleList: {
@@ -159,7 +160,7 @@ export const styles = StyleSheet.create({
   },
   scheduleDisplayToggleText: {
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.textSecondary,
   },
   scheduleDisplayToggleTextSelected: {

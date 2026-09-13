@@ -46,3 +46,9 @@ export interface UpdateItemDto {
   categoryId?: number | null;
   color?: string;
 }
+
+export interface ItemCompletion {
+  itemId: number;
+  date: string;
+  completedAt: string;
+}

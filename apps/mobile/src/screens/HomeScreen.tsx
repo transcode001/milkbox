@@ -1,4 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
+import { UndoSnackbar } from "../components/UndoSnackbar";
+import { useItemCompletions } from "../hooks/useItemCompletions";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -26,12 +29,13 @@ import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
+import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
-import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
+import { parseItemDate, startOfDay } from "../utils/calendarDates";
 import { DEFAULT_COLORS } from "../constants/colors";
 import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
 import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
@@ -45,6 +49,9 @@ type Props = CompositeScreenProps<
 // (dateSelectorButtonTextなど)と同じくFigma上のraw hexで、textPrimary(黒)/
 // textSecondary(#666)どちらのトークンとも一致しないためそのまま踏襲している。
 const NOTIFICATION_ENABLED_COLOR = "#333";
+
+// スワイプ削除後、実際にDBから消すまでUndoできる猶予時間。
+const DELETE_UNDO_TIMEOUT_MS = 5000;
 
 // utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
 // あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
@@ -76,15 +83,10 @@ const formatCategoryWeekdays = (section: CategorySection, category?: Category): 
 
 const HomeScreen = ({ navigation }: Props) => {
   const [sections, setSections] = useState<CategorySection[]>([]);
+  const [collapsedSectionKeys, setCollapsedSectionKeys] = useState<Set<string>>(() => new Set());
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [editingCategory, setEditingCategory] = useState<{
-    id: number;
-  } | null>(null);
-  const [editCategoryName, setEditCategoryName] = useState("");
-  const [editCategoryWeekdays, setEditCategoryWeekdays] = useState<number[]>([]);
-  const [editCategoryColor, setEditCategoryColor] = useState<string>(DEFAULT_COLORS.category);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
@@ -96,6 +98,11 @@ const HomeScreen = ({ navigation }: Props) => {
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
+  const completions = useItemCompletions();
+  // スワイプ削除の対象。DBからは即座に消さず、この猶予期間だけ一覧から隠して
+  // Undoできるようにする(visibleSectionsで実際のフィルタを行う)。
+  const [pendingDelete, setPendingDelete] = useState<SavedItem | null>(null);
+  const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const loadItems = useCallback(async () => {
     // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
@@ -132,13 +139,56 @@ const HomeScreen = ({ navigation }: Props) => {
     navigation.navigate("AddTask");
   };
 
-  const handleDeleteItem = async (id: number) => {
+  // Undoされなかった保留中削除を実際にDBへ反映する。失敗時は一覧を再読み込みして
+  // (隠されたままになっていた)アイテムを正しい状態に戻す。
+  const finalizeDelete = useCallback(async (item: SavedItem) => {
     try {
-      await dbManager.deleteItem(id);
-      await loadItems();
+      await dbManager.deleteItem(item.id);
+      // 削除確定後はpendingDeleteによる一時的な非表示フィルタが外れる(タイマー発火時に
+      // pendingDeleteをnullにする、または次の削除でpendingDeleteが別アイテムに切り替わる)
+      // ため、実データ(sections)側からもここで取り除く。取り除かないと確定削除された
+      // アイテムが一覧に復活して見えてしまう。
+      setSections((current) =>
+        current
+          .map((section) => ({
+            ...section,
+            data: section.data.filter((sectionItem) => sectionItem.id !== item.id),
+          }))
+          .filter((section) => section.data.length > 0),
+      );
     } catch {
       Alert.alert("エラー", "タスクの削除に失敗しました");
+      await loadItems();
     }
+  }, [dbManager, loadItems]);
+
+  const clearPendingDeleteTimer = () => {
+    if (pendingDeleteTimerRef.current) {
+      clearTimeout(pendingDeleteTimerRef.current);
+      pendingDeleteTimerRef.current = null;
+    }
+  };
+
+  // スナックバーは常に直近1件だけを表示する単純な設計。既に保留中の削除がある状態で
+  // 別のアイテムを削除した場合、前のものは猶予を待たずにすぐ確定させる。
+  const requestDeleteItem = (item: SavedItem) => {
+    const previous = pendingDelete;
+    clearPendingDeleteTimer();
+    setPendingDelete(item);
+    pendingDeleteTimerRef.current = setTimeout(() => {
+      pendingDeleteTimerRef.current = null;
+      setPendingDelete((current) => (current?.id === item.id ? null : current));
+      void finalizeDelete(item);
+    }, DELETE_UNDO_TIMEOUT_MS);
+
+    if (previous && previous.id !== item.id) {
+      void finalizeDelete(previous);
+    }
+  };
+
+  const handleUndoDelete = () => {
+    clearPendingDeleteTimer();
+    setPendingDelete(null);
   };
 
   const handleToggleItemNotification = async (item: SavedItem) => {
@@ -196,16 +246,6 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
-  const openCategoryEditor = (category: Category) => {
-    const weekdays = parseWeekdays(category.weekdays);
-    setEditingCategory({
-      id: category.id,
-    });
-    setEditCategoryName(category.name);
-    setEditCategoryWeekdays(weekdays);
-    setEditCategoryColor(category.color);
-  };
-
   const openItemEditor = (item: SavedItem) => {
     setEditingItem(item);
     setEditItemText(item.text);
@@ -217,41 +257,6 @@ const HomeScreen = ({ navigation }: Props) => {
     // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
     // notificationMinutesBefore自体を見て復元用の値を決める。
     itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
-  };
-
-  const toggleEditCategoryWeekday = (weekday: number) => {
-    setEditCategoryWeekdays((current) =>
-      current.includes(weekday)
-        ? current.filter((value) => value !== weekday)
-        : [...current, weekday].sort((left, right) => left - right),
-    );
-  };
-
-  const handleUpdateCategory = async () => {
-    if (!editingCategory) return;
-    const trimmedName = editCategoryName.trim();
-    if (!trimmedName) {
-      Alert.alert("Error", "カテゴリ名を入力してください");
-      return;
-    }
-
-    try {
-      await dbManager.updateCategory(
-        editingCategory.id,
-        trimmedName,
-        editCategoryWeekdays.length > 0
-          ? JSON.stringify(editCategoryWeekdays)
-          : null,
-        undefined,
-        undefined,
-        editCategoryColor,
-      );
-      setEditingCategory(null);
-      await loadItems();
-      Alert.alert("完了", "カテゴリ内容を変更しました");
-    } catch {
-      Alert.alert("エラー", "タスクの更新に失敗しました");
-    }
   };
 
   const handleUpdateItem = async () => {
@@ -341,19 +346,17 @@ const HomeScreen = ({ navigation }: Props) => {
     }
   };
 
-  const renderRightActions = (id: number) => (
+  const renderRightActions = (item: SavedItem) => (
     <TouchableOpacity
       style={styles.deleteAction}
-      onPress={() => {
-        void handleDeleteItem(id);
-      }}
+      onPress={() => requestDeleteItem(item)}
       activeOpacity={0.8}
     >
       <Text style={styles.deleteActionText}>削除</Text>
     </TouchableOpacity>
   );
 
-  const formatItemDateTime = (value?: string) => {
+  const formatItemDateTime = (value?: string, timeOnly = false) => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return "-";
@@ -362,18 +365,31 @@ const HomeScreen = ({ navigation }: Props) => {
     const day = String(date.getDate()).padStart(2, "0");
     const hour = String(date.getHours()).padStart(2, "0");
     const minute = String(date.getMinutes()).padStart(2, "0");
+    if (timeOnly) return `${hour}:${minute}`;
     return `${year}.${month}.${day} ${hour}:${minute}`;
   };
 
-  const formatItemDateTimeRange = (item: { startDate?: string; endDate?: string }) => {
+  // カテゴリ付きタスクはAddTaskScreen側の登録時、日付部分が常に「今日」で
+  // 埋まる(曜日+時刻の繰り返しが本体で、日付自体に意味がないため)。一方
+  // HomeScreenの編集モーダルはカテゴリの有無を問わず任意の日付を設定できるので、
+  // 開始/終了のどちらかが「今日」以外の日付になっていれば、それはユーザーが
+  // 意図的に設定した実際の日付とみなして表示する。
+  const hasMeaningfulDate = (value?: string) => {
+    const parsed = value ? parseItemDate(value) : null;
+    return parsed !== null && parsed.getTime() !== startOfDay(new Date()).getTime();
+  };
+
+  const formatItemDateTimeRange = (item: Pick<SavedItem, "startDate" | "endDate" | "categoryId">) => {
+    const timeOnly =
+      item.categoryId != null && !hasMeaningfulDate(item.startDate) && !hasMeaningfulDate(item.endDate);
     if (item.startDate && item.endDate) {
-      return `${formatItemDateTime(item.startDate)} ～ ${formatItemDateTime(item.endDate)}`;
+      return `${formatItemDateTime(item.startDate, timeOnly)} ～ ${formatItemDateTime(item.endDate, timeOnly)}`;
     }
     if (item.startDate) {
-      return `${formatItemDateTime(item.startDate)} ～`;
+      return `${formatItemDateTime(item.startDate, timeOnly)} ～`;
     }
     if (item.endDate) {
-      return `～ ${formatItemDateTime(item.endDate)}`;
+      return `～ ${formatItemDateTime(item.endDate, timeOnly)}`;
     }
     return null;
   };
@@ -383,21 +399,42 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
+  const visibleSections = useMemo(() => sections.map((section) => {
+    const categoryId = section.data[0]?.categoryId;
+    const key = categoryId != null ? String(categoryId) : UNCATEGORIZED_KEY;
+    const category = categories.find((candidate) => candidate.id === categoryId);
+    const collapsed = collapsedSectionKeys.has(key);
+    // 閉じてもカテゴリ情報と曜日表示を失わないよう、元のdataからメタデータを保持する。
+    // 保留中削除のアイテムはUndo猶予の間、実データ(sections)には残したまま
+    // 表示だけ隠す。loadItems()がフォーカス復帰等で再実行されて元データが
+    // 更新されても、pendingDeleteが残っていれば引き続き非表示にできる。
+    const data = collapsed
+      ? []
+      : pendingDelete
+        ? section.data.filter((item) => item.id !== pendingDelete.id)
+        : section.data;
+    return {
+      ...section,
+      key,
+      categoryId,
+      weekdayLabels: formatCategoryWeekdays(section, category),
+      collapsed,
+      data,
+    };
+  }), [sections, categories, collapsedSectionKeys, pendingDelete]);
+
+  const toggleSection = (key: string) => {
+    setCollapsedSectionKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <CategoryEditorModal
-        visible={editingCategory !== null}
-        mode="edit"
-        name={editCategoryName}
-        weekdays={editCategoryWeekdays}
-        color={editCategoryColor}
-        onChangeName={setEditCategoryName}
-        onToggleWeekday={toggleEditCategoryWeekday}
-        onChangeColor={setEditCategoryColor}
-        onCancel={() => setEditingCategory(null)}
-        onSave={() => void handleUpdateCategory()}
-      />
-
       <Modal
         visible={editingItem !== null}
         transparent={true}
@@ -551,42 +588,65 @@ const HomeScreen = ({ navigation }: Props) => {
         </View>
       ) : (
         <SectionList
-          sections={sections}
+          sections={visibleSections}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
           renderSectionHeader={({ section }) => {
-            const categoryId = section.data[0]?.categoryId;
-            const category = categoryId ? categoryById.get(categoryId) : undefined;
-            const weekdayLabels = formatCategoryWeekdays(section, category);
+            const category = section.categoryId != null ? categoryById.get(section.categoryId) : undefined;
+            const weekdayLabels = section.weekdayLabels;
+            // Figmaの更新で、タスク単位の色ドットではなくカテゴリ単位で1つだけ
+            // ヘッダーに表示する形になった。指定なし(未分類)セクションは特定の
+            // カテゴリ色を持たないため、中間グレー(colors.tabInactive)を使う。
+            const sectionColor = category ? category.color : colors.tabInactive;
             const headerContent = (
               <>
-                <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                <View style={styles.sectionCategoryLabel}>
+                  <View style={[styles.sectionColorIndicator, { backgroundColor: sectionColor }]} />
+                  <Text style={styles.sectionHeaderText}>{section.title}</Text>
+                </View>
                 {weekdayLabels ? (
                   <Text style={styles.sectionWeekdays}>{weekdayLabels}</Text>
                 ) : null}
               </>
             );
 
-            return category ? (
+            return (
               <TouchableOpacity
                 style={styles.sectionHeader}
-                onPress={() => openCategoryEditor(category)}
+                onPress={() => toggleSection(section.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`${section.title}を${section.collapsed ? "展開" : "折りたたむ"}`}
+                accessibilityState={{ expanded: !section.collapsed }}
                 activeOpacity={0.8}
               >
-                {headerContent}
+                <View style={styles.sectionHeaderContent}>{headerContent}</View>
+                <View style={styles.sectionToggle}>
+                  <Ionicons
+                    name={section.collapsed ? "chevron-down" : "chevron-up"}
+                    size={20}
+                    color={colors.textSecondary}
+                  />
+                </View>
               </TouchableOpacity>
-            ) : (
-              <View style={styles.sectionHeader}>
-                {headerContent}
-              </View>
             );
           }}
+          // renderItemはメモ化していないインラインの関数なので、completionsが更新されて
+          // HomeScreenが再レンダーされるたびに新しい関数として渡され、SectionListの各セルは
+          // それだけで再描画される(=extraDataは不要)。もしrenderItemをuseCallbackで
+          // メモ化するようになったら、completionsの更新をセルへ伝えるためにextraDataの
+          // 指定を復活させること。
           renderItem={({ item }) => {
             const dateTimeRange = formatItemDateTimeRange(item);
 
             return (
-              <Swipeable renderRightActions={() => renderRightActions(item.id)}>
+              <Swipeable renderRightActions={() => renderRightActions(item)}>
                 <View style={styles.itemContainer}>
+                  <CompletionCheckbox
+                    text={item.text}
+                    completed={completions.completedIds.has(item.id)}
+                    disabled={completions.disabled}
+                    onPress={() => void completions.toggleCompletion(item.id)}
+                  />
                   <TouchableOpacity
                     style={styles.itemEditButton}
                     onPress={() => openItemEditor(item)}
@@ -597,13 +657,17 @@ const HomeScreen = ({ navigation }: Props) => {
                     activeOpacity={0.8}
                   >
                     <View style={styles.itemMainRow}>
-                      <View
-                        style={[
-                          styles.itemColorIndicator,
-                          { backgroundColor: item.color || DEFAULT_COLORS.task },
-                        ]}
-                      />
-                      <Text style={styles.itemText}>{item.text}</Text>
+                      {/* カテゴリ付きタスクは色をセクションヘッダー側に1つだけ表示するため、
+                          タスク行ではドットを出さない。未分類タスクだけタスクごとの色を残す。 */}
+                      {item.categoryId == null ? (
+                        <View
+                          style={[
+                            styles.itemColorIndicator,
+                            { backgroundColor: item.color || DEFAULT_COLORS.task },
+                          ]}
+                        />
+                      ) : null}
+                      <Text style={[styles.itemText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
                       {hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
                       ) : null}
@@ -632,6 +696,12 @@ const HomeScreen = ({ navigation }: Props) => {
           }}
         />
       )}
+      {pendingDelete ? (
+        <UndoSnackbar
+          message={`「${pendingDelete.text}」を削除しました`}
+          onAction={handleUndoDelete}
+        />
+      ) : null}
     </SafeAreaView>
   );
 };

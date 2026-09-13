@@ -51,13 +51,16 @@ export function parsePointDate(value?: string): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+// 日曜始まりの週の起点(その日を含む週の日曜日)を求める共通ヘルパー。
+// getCalendarStart/buildWeekの両方がこの「前の日曜日」計算を必要とするため、
+// 個別に同じ引き算を重複させないよう共通化している。
+function getSundayOnOrBefore(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
+}
+
 export function getCalendarStart(date: Date): Date {
   const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  return new Date(
-    firstDayOfMonth.getFullYear(),
-    firstDayOfMonth.getMonth(),
-    firstDayOfMonth.getDate() - firstDayOfMonth.getDay(),
-  );
+  return getSundayOnOrBefore(firstDayOfMonth);
 }
 
 export function buildMonthGrid(date: Date): Date[][] {
@@ -76,4 +79,33 @@ export function buildMonthGrid(date: Date): Date[][] {
 
 export function formatMonthLabel(date: Date): string {
   return `${date.getFullYear()}年${date.getMonth() + 1}月`;
+}
+
+export function buildWeek(date: Date): Date[] {
+  const start = getSundayOnOrBefore(startOfDay(date));
+  return Array.from({ length: 7 }, (_, index) =>
+    new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+}
+
+export function formatWeekRangeLabel(weekStart: Date, weekEnd: Date): string {
+  const start = `${weekStart.getMonth() + 1}月${weekStart.getDate()}日`;
+  if (createDateKey(weekStart) === createDateKey(weekEnd)) return start;
+  if (weekStart.getFullYear() !== weekEnd.getFullYear()) {
+    return `${weekStart.getFullYear()}年${start} − ${weekEnd.getFullYear()}年${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  }
+  const end = weekStart.getMonth() === weekEnd.getMonth()
+    ? `${weekEnd.getDate()}日`
+    : `${weekEnd.getMonth() + 1}月${weekEnd.getDate()}日`;
+  return `${start} − ${end}`;
+}
+
+export function buildDayRange(anchor: Date, count: number): Date[] {
+  if (count === 7) return buildWeek(anchor);
+  return Array.from({ length: count }, (_, index) =>
+    new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + index));
+}
+
+export function moveDayRange(anchor: Date, count: number, offset: number): Date {
+  const start = count === 7 ? buildWeek(anchor)[0] : anchor;
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + count * offset);
 }

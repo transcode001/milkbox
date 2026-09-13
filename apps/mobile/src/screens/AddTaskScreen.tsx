@@ -28,6 +28,11 @@ import { DEFAULT_COLORS } from "../constants/colors";
 type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
 const DEFAULT_CATEGORY_WEEKDAYS = [1, 2, 3, 4, 5];
 
+// ベルアイコンで示す「通知タイミング」欄の有効時の色。HomeScreen(編集モーダル・
+// 一覧のベルアイコン)と同じくFigma上のraw hexで、textPrimary(黒)/textSecondary
+// (#666)どちらのトークンとも一致しないためそのまま踏襲している。
+const NOTIFICATION_ENABLED_COLOR = "#333";
+
 const AddTaskScreen = ({ navigation }: Props) => {
   const { dbManager } = useDatabaseManager();
   const {
@@ -217,7 +222,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled: reminder.notificationEnabled,
         notificationMinutesBefore: reminder.notificationMinutesBefore,
-        color: taskColor,
+        color: noCategoryChecked ? taskColor : DEFAULT_COLORS.task,
       });
 
       setText("");
@@ -422,18 +427,20 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     onSubmitEditing={Keyboard.dismiss}
                   />
 
-                  <View style={styles.colorPickerContainer}>
-                    <Text style={styles.dateLabel}>タスクの色</Text>
-                    <ColorPicker
-                      value={taskColor}
-                      defaultColor={DEFAULT_COLORS.task}
-                      onChange={setTaskColor}
-                    />
-                  </View>
+                  {noCategoryChecked ? (
+                    <View style={styles.colorPickerContainer}>
+                      <Text style={styles.dateLabel}>タスクの色</Text>
+                      <ColorPicker
+                        value={taskColor}
+                        defaultColor={DEFAULT_COLORS.task}
+                        onChange={setTaskColor}
+                      />
+                    </View>
+                  ) : null}
 
                   <View style={styles.dateRow}>
-                    <View>
-                      <Text style={styles.dateLabel}>開始</Text>
+                    <View style={styles.dateFieldRow}>
+                      <Text style={styles.dateFieldLabel}>開始</Text>
                       <View style={styles.dateControlRow}>
                         {noCategoryChecked ? (
                           <TouchableOpacity
@@ -462,8 +469,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
                         </TouchableOpacity>
                       </View>
                     </View>
-                    <View>
-                      <Text style={styles.dateLabel}>終了</Text>
+                    <View style={styles.dateFieldRow}>
+                      <Text style={styles.dateFieldLabel}>終了</Text>
                       <View style={styles.dateControlRow}>
                         {noCategoryChecked ? (
                           <TouchableOpacity
@@ -520,35 +527,33 @@ const AddTaskScreen = ({ navigation }: Props) => {
 
                   {dateError && <Text style={styles.errorText}>{dateError}</Text>}
                   <View style={styles.reminderContainer}>
-                    <Text style={styles.dateLabel}>通知タイミング</Text>
-                    <TouchableOpacity
-                      style={styles.checkboxRow}
-                      onPress={reminder.toggleReminderEnabled}
-                      activeOpacity={0.8}
-                    >
-                      <View
-                        style={[
-                          styles.checkboxMuted,
-                          !reminder.notificationEnabled && styles.checkboxChecked,
-                        ]}
+                    <View style={styles.notificationRow}>
+                      <TouchableOpacity
+                        onPress={reminder.toggleReminderEnabled}
+                        accessibilityRole="switch"
+                        accessibilityLabel="通知タイミング"
+                        accessibilityState={{ checked: reminder.notificationEnabled }}
                       >
-                        {!reminder.notificationEnabled ? (
-                          <Text style={styles.checkboxMark}>✓</Text>
-                        ) : null}
+                        <Ionicons
+                          name={reminder.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
+                          size={18}
+                          color={reminder.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
+                        />
+                      </TouchableOpacity>
+                      <View style={styles.notificationDropdown}>
+                        <SelectModal
+                          options={REMINDER_SELECT_OPTIONS}
+                          selectedValue={reminder.notificationMinutesBefore.toString()}
+                          selectedLabel={reminder.selectedReminderLabel}
+                          isOpen={reminder.isReminderListOpen}
+                          disabled={!reminder.notificationEnabled}
+                          accessibilityLabel="通知タイミングを選択"
+                          onToggle={() => reminder.setIsReminderListOpen((current) => !current)}
+                          onClose={() => reminder.setIsReminderListOpen(false)}
+                          onSelect={(value) => reminder.selectReminderMinutes(Number(value))}
+                        />
                       </View>
-                      <Text style={styles.checkboxLabel}>通知を設定しない</Text>
-                    </TouchableOpacity>
-                    <SelectModal
-                      options={REMINDER_SELECT_OPTIONS}
-                      selectedValue={reminder.notificationMinutesBefore.toString()}
-                      selectedLabel={reminder.selectedReminderLabel}
-                      isOpen={reminder.isReminderListOpen}
-                      disabled={!reminder.notificationEnabled}
-                      accessibilityLabel="通知タイミングを選択"
-                      onToggle={() => reminder.setIsReminderListOpen((current) => !current)}
-                      onClose={() => reminder.setIsReminderListOpen(false)}
-                      onSelect={(value) => reminder.selectReminderMinutes(Number(value))}
-                    />
+                    </View>
                   </View>
                   <TouchableOpacity
                     style={styles.submitButton}

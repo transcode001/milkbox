@@ -57,13 +57,13 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         return prevSelectedOption;
       });
     } catch {
-      Alert.alert("Error", "Failed to load categories");
+      Alert.alert("エラー", "カテゴリの読み込みに失敗しました");
     }
   }, [dbManager]);
 
   const handleAddCategory = useCallback(async (weekdays?: number[]) => {
     if (!newCategoryName.trim()) {
-      Alert.alert("Error", "Please enter category name");
+      Alert.alert("エラー", "カテゴリ名を入力してください");
       return false;
     }
 
@@ -79,10 +79,10 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       setNewCategoryColor(DEFAULT_COLORS.category);
       setShowAddCategoryModal(false);
       await loadCategories();
-      Alert.alert("Success", "Category added!");
+      Alert.alert("完了", "カテゴリを追加しました");
       return true;
     } catch {
-      Alert.alert("Error", "Failed to add category");
+      Alert.alert("エラー", "カテゴリの追加に失敗しました");
       return false;
     }
   }, [dbManager, loadCategories, newCategoryColor, newCategoryName]);
@@ -95,7 +95,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   ) => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      Alert.alert("Error", "カテゴリ名を入力してください");
+      Alert.alert("エラー", "カテゴリ名を入力してください");
       return false;
     }
 
@@ -112,7 +112,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       Alert.alert("完了", "カテゴリ内容を変更しました");
       return true;
     } catch {
-      Alert.alert("Error", "カテゴリの更新に失敗しました");
+      Alert.alert("エラー", "カテゴリの更新に失敗しました");
       return false;
     }
   }, [dbManager, loadCategories]);
@@ -132,7 +132,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       setSelectedOption((current) => current === categoryId.toString() ? "" : current);
       await loadCategories();
     } catch {
-      Alert.alert("Error", "カテゴリの削除に失敗しました");
+      Alert.alert("エラー", "カテゴリの削除に失敗しました");
     }
   }, [dbManager, loadCategories]);
 

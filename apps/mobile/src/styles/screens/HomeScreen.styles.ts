@@ -63,6 +63,31 @@ export const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 8,
   },
+  sectionHeaderContent: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    minHeight: 44,
+  },
+  sectionToggle: {
+    width: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionCategoryLabel: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  sectionColorIndicator: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    flexShrink: 0,
+  },
   sectionHeaderText: {
     flexShrink: 1,
     fontSize: 16,
@@ -126,14 +151,15 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
+  // FigmaのSwipe Delete Row(327:163)に合わせて、行の高さいっぱい・角丸なし・
+  // 余白なしのボタンにする(以前は浮いたピル型だったが、スワイプで隠れていた
+  // 部分がそのまま露出する見た目に変更)。
   deleteAction: {
-    width: 84,
+    width: 64,
     height: "100%",
     backgroundColor: colors.destructive,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radii.md,
-    marginVertical: 4,
   },
   deleteActionText: {
     color: colors.onPrimary,
