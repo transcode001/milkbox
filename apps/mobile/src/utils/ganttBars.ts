@@ -102,3 +102,13 @@ export function getRangeBarsForWeek(
   entries.sort((a, b) => a.startCol - b.startCol || a.endCol - b.endCol);
   return assignLanes(entries);
 }
+
+// 月カレンダーとSignature Selectorの予定帯プレビューで共通の色・線表現。
+export function getGanttBarAppearance(color: string, isWeekday: boolean) {
+  return {
+    backgroundColor: isWeekday ? `${color}22` : color,
+    borderWidth: isWeekday ? 1.5 : 0,
+    borderColor: isWeekday ? color : "transparent",
+    borderStyle: isWeekday ? "dashed" as const : "solid" as const,
+  };
+}

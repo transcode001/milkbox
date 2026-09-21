@@ -15,6 +15,7 @@ export class SQLiteCategoryRepository {
       CREATE TABLE IF NOT EXISTS categories (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
+        icon TEXT,
         weekdays TEXT,
         startDate TEXT,
         endDate TEXT,
@@ -27,6 +28,9 @@ export class SQLiteCategoryRepository {
     );
     const columnNames = tableInfo.map((col) => col.name);
 
+    if (!columnNames.includes('icon')) {
+      await this.db.execAsync('ALTER TABLE categories ADD COLUMN icon TEXT;');
+    }
     if (!columnNames.includes('weekdays')) {
       await this.db.execAsync('ALTER TABLE categories ADD COLUMN weekdays TEXT;');
     }
@@ -45,9 +49,10 @@ export class SQLiteCategoryRepository {
 
   async findAll(): Promise<Category[]> {
     if (!this.db) throw new Error('Database not initialized');
-    return await this.db.getAllAsync<Category>(
+    const categories = await this.db.getAllAsync<Category>(
       'SELECT * FROM categories ORDER BY id ASC'
     );
+    return categories.map(category => ({ ...category, icon: category.icon ?? undefined }));
   }
 
   async findById(id: number): Promise<Category | null> {
@@ -56,7 +61,7 @@ export class SQLiteCategoryRepository {
       'SELECT * FROM categories WHERE id = ?',
       [id]
     );
-    return result || null;
+    return result ? { ...result, icon: result.icon ?? undefined } : null;
   }
 
   async create(
@@ -65,11 +70,12 @@ export class SQLiteCategoryRepository {
     startDate?: string,
     endDate?: string,
     color: string = DEFAULT_COLORS.category,
+    icon?: string,
   ): Promise<Category> {
     if (!this.db) throw new Error('Database not initialized');
     const result = await this.db.runAsync(
-      'INSERT INTO categories (name, weekdays, startDate, endDate, color) VALUES (?, ?, ?, ?, ?)',
-      [name, weekdays ?? null, startDate ?? null, endDate ?? null, color]
+      'INSERT INTO categories (name, weekdays, startDate, endDate, color, icon) VALUES (?, ?, ?, ?, ?, ?)',
+      [name, weekdays ?? null, startDate ?? null, endDate ?? null, color, icon ?? null]
     );
     return {
       id: result.lastInsertRowId,
@@ -78,6 +84,7 @@ export class SQLiteCategoryRepository {
       startDate: startDate ?? null,
       endDate: endDate ?? null,
       color,
+      icon,
     };
   }
 
@@ -88,6 +95,7 @@ export class SQLiteCategoryRepository {
     startDate?: string | null,
     endDate?: string | null,
     color?: string,
+    icon?: string,
   ): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     const updates: string[] = [];
@@ -112,6 +120,10 @@ export class SQLiteCategoryRepository {
     if (color !== undefined) {
       updates.push('color = ?');
       params.push(color);
+    }
+    if (icon !== undefined) {
+      updates.push('icon = ?');
+      params.push(icon);
     }
     if (updates.length === 0) return;
 

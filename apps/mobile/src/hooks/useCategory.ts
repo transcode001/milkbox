@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import type { Category } from "@milkbox/shared";
 import type { DatabaseManager } from "../repositories/sqlite/DatabaseManager";
+import { DEFAULT_CATEGORY_ICON } from "../constants/categoryIcons";
 import { DEFAULT_COLORS } from "../constants/colors";
 
 export type DeleteCategoryMode = "delete" | "uncategorize";
@@ -18,6 +19,8 @@ export interface UseCategoryResult {
   showAddCategoryModal: boolean;
   newCategoryName: string;
   newCategoryColor: string;
+  newCategoryIcon: string;
+  setNewCategoryIcon: React.Dispatch<React.SetStateAction<string>>;
   setSelectedOption: React.Dispatch<React.SetStateAction<string>>;
   setNoCategoryChecked: React.Dispatch<React.SetStateAction<boolean>>;
   setShowAddCategoryModal: React.Dispatch<React.SetStateAction<boolean>>;
@@ -25,7 +28,7 @@ export interface UseCategoryResult {
   setNewCategoryColor: React.Dispatch<React.SetStateAction<string>>;
   loadCategories: () => Promise<void>;
   handleAddCategory: (weekdays?: number[]) => Promise<boolean>;
-  handleUpdateCategory: (categoryId: number, name: string, weekdays: number[], color: string) => Promise<boolean>;
+  handleUpdateCategory: (categoryId: number, name: string, weekdays: number[], color: string, icon?: string) => Promise<boolean>;
   handleDeleteCategory: (categoryId: number, mode: DeleteCategoryMode) => Promise<void>;
 }
 
@@ -35,6 +38,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
   const [noCategoryChecked, setNoCategoryChecked] = useState(false);
   const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryIcon, setNewCategoryIcon] = useState<string>(DEFAULT_CATEGORY_ICON);
   const [newCategoryColor, setNewCategoryColor] = useState<string>(DEFAULT_COLORS.category);
 
   const selectedCategoryName = useMemo(() => {
@@ -74,8 +78,10 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         undefined,
         undefined,
         newCategoryColor,
+        newCategoryIcon,
       );
       setNewCategoryName("");
+      setNewCategoryIcon(DEFAULT_CATEGORY_ICON);
       setNewCategoryColor(DEFAULT_COLORS.category);
       setShowAddCategoryModal(false);
       await loadCategories();
@@ -85,13 +91,14 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
       Alert.alert("エラー", "カテゴリの追加に失敗しました");
       return false;
     }
-  }, [dbManager, loadCategories, newCategoryColor, newCategoryName]);
+  }, [dbManager, loadCategories, newCategoryColor, newCategoryName, newCategoryIcon]);
 
   const handleUpdateCategory = useCallback(async (
     categoryId: number,
     name: string,
     weekdays: number[],
     color: string,
+    icon?: string,
   ) => {
     const trimmedName = name.trim();
     if (!trimmedName) {
@@ -107,6 +114,7 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
         undefined,
         undefined,
         color,
+        icon,
       );
       await loadCategories();
       Alert.alert("完了", "カテゴリ内容を変更しました");
@@ -144,6 +152,8 @@ export const useCategory = ({ dbManager }: UseCategoryParams): UseCategoryResult
     showAddCategoryModal,
     newCategoryName,
     newCategoryColor,
+    newCategoryIcon,
+    setNewCategoryIcon,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,

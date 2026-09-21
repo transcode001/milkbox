@@ -53,6 +53,21 @@ describe("SQLite item completions", () => {
     expect(db.prepare("PRAGMA user_version").get()).toEqual({ user_version: 1 });
   });
 
+  it("reads completion occurrences inclusively across a date range in one query", async () => {
+    await repository.setCompletion(1, "2026-09-19", true);
+    await repository.setCompletion(1, "2026-09-20", true);
+    await repository.setCompletion(1, "2026-09-26", true);
+    await repository.setCompletion(2, "2026-09-26", true);
+    await repository.setCompletion(1, "2026-09-27", true);
+    jest.mocked(adapter.getAllAsync).mockClear();
+    expect(await repository.findCompletionsInRange("2026-09-20", "2026-09-26")).toEqual([
+      { itemId: 1, date: "2026-09-20" }, { itemId: 1, date: "2026-09-26" }, { itemId: 2, date: "2026-09-26" },
+    ]);
+    expect(adapter.getAllAsync).toHaveBeenCalledTimes(1);
+    await repository.setCompletion(1, "2026-09-20", false);
+    expect(await repository.findCompletionsInRange("2026-09-20", "2026-09-20")).toEqual([]);
+  });
+
   it("upserts an ISO timestamp, isolates dates, and reads all completed IDs in one query", async () => {
     await repository.setCompletion(1, "2026-09-13", true);
     await repository.setCompletion(1, "2026-09-13", true);

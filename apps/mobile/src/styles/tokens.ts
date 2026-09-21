@@ -30,6 +30,7 @@ export const colors = {
   tabInactiveAndroid,
   // フォーム送信などの肯定的アクション用。プラットフォームによる作り分けは行わない。
   success: "#28a745",
+  pending: "#B65D0A",
 
   primary: platformValue(primaryIos, primaryAndroid),
   destructive: platformValue(destructiveIos, destructiveAndroid),

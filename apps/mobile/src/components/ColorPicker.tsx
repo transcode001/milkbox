@@ -9,6 +9,7 @@ import {
   Text,
 } from "react-native";
 import { COLOR_PALETTE } from "../constants/colors";
+import { pickerPopoverStyles } from "../styles/pickerPopover";
 import { colors } from "../styles/tokens";
 
 type ColorPickerProps = {
@@ -44,7 +45,7 @@ export const ColorPicker = ({ value, defaultColor, onChange }: ColorPickerProps)
   return (
     <View ref={triggerRef} collapsable={false}>
       <TouchableOpacity
-        style={styles.trigger}
+        style={pickerPopoverStyles.trigger}
         onPress={openPicker}
         accessibilityRole="button"
         accessibilityLabel="色を選択"
@@ -55,10 +56,10 @@ export const ColorPicker = ({ value, defaultColor, onChange }: ColorPickerProps)
       </TouchableOpacity>
 
       <Modal visible={isOpen} transparent={true} animationType="fade" onRequestClose={() => setIsOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setIsOpen(false)}>
+        <Pressable style={pickerPopoverStyles.backdrop} onPress={() => setIsOpen(false)}>
           <Pressable
             style={[
-              styles.panel,
+              pickerPopoverStyles.panel,
               {
                 top: panelPosition.top,
                 left: panelPosition.left,
@@ -107,29 +108,9 @@ export const ColorPicker = ({ value, defaultColor, onChange }: ColorPickerProps)
 };
 
 const styles = StyleSheet.create({
-  trigger: {
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 20,
-    backgroundColor: "#E8EAF0",
-  },
+  // trigger/backdrop/panelの見た目(色・角丸・シャドウ)はIconPickerと共通なので
+  // pickerPopoverStylesを使う。ここにはColorPicker固有のスタイルだけを残す。
   triggerColor: { width: 20, height: 20, borderRadius: 10 },
-  backdrop: { flex: 1 },
-  panel: {
-    position: "absolute",
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: "#F2F3F7",
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
-  },
   paletteRows: { gap: 8 },
   paletteRow: { flexDirection: "row", justifyContent: "space-between", gap: 3 },
   colorButtonOutline: {

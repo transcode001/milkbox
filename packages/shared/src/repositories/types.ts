@@ -1,4 +1,5 @@
 export interface Category {
+  icon?: string;
   id: number;
   name: string;
   weekdays?: string;

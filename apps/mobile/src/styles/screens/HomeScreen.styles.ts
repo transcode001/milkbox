@@ -82,12 +82,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  sectionColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    flexShrink: 0,
-  },
   sectionHeaderText: {
     flexShrink: 1,
     fontSize: 16,
@@ -115,12 +109,6 @@ export const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  itemColorIndicator: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    flexShrink: 0,
   },
   itemText: {
     flexShrink: 1,

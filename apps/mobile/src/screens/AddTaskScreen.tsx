@@ -1,3 +1,4 @@
+import { SignatureSelector } from "../components/SignatureSelector";
 import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, Modal, Keyboard, KeyboardAvoidingView, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -21,6 +22,7 @@ import {
 } from "../utils/dateValidation";
 import { parseWeekdays, WEEKDAY_LABELS } from "../utils/weekdays";
 import { SelectModal, type SelectOption } from "../components/SelectModal";
+import { DEFAULT_CATEGORY_ICON } from "../constants/categoryIcons";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { ColorPicker } from "../components/ColorPicker";
 import { DEFAULT_COLORS } from "../constants/colors";
@@ -43,6 +45,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
     showAddCategoryModal,
     newCategoryName,
     newCategoryColor,
+    newCategoryIcon,
+    setNewCategoryIcon,
     setSelectedOption,
     setNoCategoryChecked,
     setShowAddCategoryModal,
@@ -82,6 +86,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     name: string;
     weekdays: number[];
     color: string;
+    icon?: string;
   } | null>(null);
 
   const closeCategoryList = useCallback(() => {
@@ -90,9 +95,10 @@ const AddTaskScreen = ({ navigation }: Props) => {
   const closeAddCategoryModal = useCallback(() => {
     setNewCategoryName("");
     setNewCategoryColor(DEFAULT_COLORS.category);
+    setNewCategoryIcon(DEFAULT_CATEGORY_ICON);
     setNewCategoryWeekdays(DEFAULT_CATEGORY_WEEKDAYS);
     setShowAddCategoryModal(false);
-  }, [setNewCategoryColor, setNewCategoryName, setShowAddCategoryModal]);
+  }, [setNewCategoryIcon, setNewCategoryColor, setNewCategoryName, setShowAddCategoryModal]);
 
   const inheritedWeekdays = useMemo(
     () => parseWeekdays(categories.find((category) => category.id.toString() === selectedOption)?.weekdays),
@@ -135,6 +141,13 @@ const AddTaskScreen = ({ navigation }: Props) => {
     }
   };
 
+  const selectCategory = (value: string) => {
+    setSelectedOption(value);
+    setCategoryError(null);
+    setDateError(null);
+    closeCategoryList();
+  };
+
   const openCategoryEditor = (option: SelectOption) => {
     const category = categories.find((candidate) => candidate.id.toString() === option.value);
     if (!category) return;
@@ -145,6 +158,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       name: category.name,
       weekdays: parseWeekdays(category.weekdays),
       color: category.color,
+      icon: category.icon,
     });
   };
 
@@ -155,6 +169,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
       editingCategory.name,
       editingCategory.weekdays,
       editingCategory.color,
+      editingCategory.icon,
     );
     if (updated) {
       setEditingCategory(null);
@@ -292,6 +307,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
         name={newCategoryName}
         weekdays={newCategoryWeekdays}
         color={newCategoryColor}
+        icon={newCategoryIcon}
+        onChangeIcon={setNewCategoryIcon}
         onChangeName={setNewCategoryName}
         onToggleWeekday={toggleNewCategoryWeekday}
         onChangeColor={setNewCategoryColor}
@@ -305,6 +322,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
         name={editingCategory?.name ?? ""}
         weekdays={editingCategory?.weekdays ?? []}
         color={editingCategory?.color ?? DEFAULT_COLORS.category}
+        icon={editingCategory?.icon}
+        onChangeIcon={(icon) => setEditingCategory(current => current ? { ...current, icon } : current)}
         onChangeName={(name) => {
           setEditingCategory((current) => current ? { ...current, name } : current);
         }}
@@ -362,12 +381,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     emptyLabel="カテゴリがありません"
                     onToggle={() => setIsCategoryListOpen((current) => !current)}
                     onClose={closeCategoryList}
-                    onSelect={(value) => {
-                      setSelectedOption(value);
-                      setCategoryError(null);
-                      setDateError(null);
-                      closeCategoryList();
-                    }}
+                    onSelect={selectCategory}
                     renderOptionAction={(option) => (
                       <View style={styles.categoryActions}>
                         <TouchableOpacity
@@ -402,6 +416,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
                       </TouchableOpacity>
                     )}
                   />
+
+                  {!noCategoryChecked && <SignatureSelector categories={categories} selectedValue={selectedOption} onSelect={selectCategory} />}
 
                   {categoryError && <Text style={styles.errorText}>{categoryError}</Text>}
                   {!noCategoryChecked && selectedOption ? (

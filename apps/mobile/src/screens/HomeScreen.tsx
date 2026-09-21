@@ -1,3 +1,7 @@
+import { CompletionStatsCard } from "../components/CompletionStatsCard";
+import { countCategoryOccurrences } from "../utils/completionStats";
+import { buildWeek, createDateKey, getSundayOnOrBefore } from "../utils/calendarDates";
+import { CategorySignatureIcon } from "../components/CategorySignature";
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
 import { UndoSnackbar } from "../components/UndoSnackbar";
 import { useItemCompletions } from "../hooks/useItemCompletions";
@@ -134,6 +138,37 @@ const HomeScreen = ({ navigation }: Props) => {
       void loadItems();
     }, [loadItems])
   );
+
+  // buildWeek(...)[0]だけが欲しいだけなのに7日分のDate配列を毎レンダー組み立てる
+  // 無駄を避けるため、週の起点(日曜日)だけを直接計算するgetSundayOnOrBeforeを使う。
+  const weekKey = createDateKey(getSundayOnOrBefore(startOfDay(new Date())));
+  const week = useMemo(() => buildWeek(new Date(`${weekKey}T00:00:00`)), [weekKey]);
+  const [weeklyCompleted, setWeeklyCompleted] = useState<number | null>(null);
+  const [weeklyError, setWeeklyError] = useState(false);
+  // 表示中の週が変わった時だけ「読み込み中」に戻す。completions.completedIds
+  // (今日のタスクの完了チェック)の変化では再取得はしつつも、値が来るまで
+  // 前回の数値を出したままにしてチラつきを防ぐ。
+  const loadedWeekKeyRef = useRef<string | null>(null);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (loadedWeekKeyRef.current !== weekKey) {
+      loadedWeekKeyRef.current = weekKey;
+      setWeeklyCompleted(null);
+    }
+    setWeeklyError(false);
+    void dbManager.itemRepository.findCompletionsInRange(createDateKey(week[0]), createDateKey(week[6]))
+      .then(rows => { if (active) setWeeklyCompleted(rows.length); })
+      .catch(() => { if (active) setWeeklyError(true); });
+    return () => { active = false; };
+    // sectionsは通知トグル・削除など完了件数と無関係な更新でも変わるため、依存に
+    // 含めない(含めると無関係な操作のたびに読み込み中フラッシュ+再クエリが走る)。
+    // completions.disabled(今日ぶんの完了取得の busy/エラー状態)もここでは見ない:
+    // 週間の集計は日次のuseItemCompletionsとは独立したクエリなので、日次側が
+    // エラー/読み込み中のままでも週間の取得は妨げない。
+  }, [dbManager, week, weekKey, completions.completedIds]));
+  const weeklyGroups = useMemo(() => countCategoryOccurrences(
+    sections.flatMap(section => section.data), categories, week,
+  ), [sections, categories, week]);
 
   const handleNavigateAddTask = () => {
     navigation.navigate("AddTask");
@@ -582,12 +617,10 @@ const HomeScreen = ({ navigation }: Props) => {
         <View style={styles.stateContainer}>
           <Text style={styles.stateText}>{errorMessage}</Text>
         </View>
-      ) : sections.length === 0 ? (
-        <View style={styles.stateContainer}>
-          <Text style={styles.stateText}>タスクはまだありません</Text>
-        </View>
       ) : (
         <SectionList
+          ListHeaderComponent={<CompletionStatsCard title="週の振り返り" completed={weeklyCompleted} error={weeklyError} groups={weeklyGroups} showCounts />}
+          ListEmptyComponent={<Text style={styles.stateText}>タスクはまだありません</Text>}
           sections={visibleSections}
           keyExtractor={(item) => item.id.toString()}
           contentContainerStyle={styles.listContent}
@@ -597,11 +630,10 @@ const HomeScreen = ({ navigation }: Props) => {
             // Figmaの更新で、タスク単位の色ドットではなくカテゴリ単位で1つだけ
             // ヘッダーに表示する形になった。指定なし(未分類)セクションは特定の
             // カテゴリ色を持たないため、中間グレー(colors.tabInactive)を使う。
-            const sectionColor = category ? category.color : colors.tabInactive;
             const headerContent = (
               <>
                 <View style={styles.sectionCategoryLabel}>
-                  <View style={[styles.sectionColorIndicator, { backgroundColor: sectionColor }]} />
+                  <CategorySignatureIcon category={category} />
                   <Text style={styles.sectionHeaderText}>{section.title}</Text>
                 </View>
                 {weekdayLabels ? (
@@ -658,13 +690,13 @@ const HomeScreen = ({ navigation }: Props) => {
                   >
                     <View style={styles.itemMainRow}>
                       {/* カテゴリ付きタスクは色をセクションヘッダー側に1つだけ表示するため、
-                          タスク行ではドットを出さない。未分類タスクだけタスクごとの色を残す。 */}
+                          タスク行では表示しない。未分類タスクはAddTaskScreenのタスクの色
+                          ピッカーで選んだitem.colorをそのまま使う(カテゴリのシグネチャーは
+                          持たないため)。 */}
                       {item.categoryId == null ? (
-                        <View
-                          style={[
-                            styles.itemColorIndicator,
-                            { backgroundColor: item.color || DEFAULT_COLORS.task },
-                          ]}
+                        <CategorySignatureIcon
+                          size={20}
+                          category={{ color: item.color || DEFAULT_COLORS.task }}
                         />
                       ) : null}
                       <Text style={[styles.itemText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>

@@ -54,7 +54,7 @@ export function parsePointDate(value?: string): Date | null {
 // 日曜始まりの週の起点(その日を含む週の日曜日)を求める共通ヘルパー。
 // getCalendarStart/buildWeekの両方がこの「前の日曜日」計算を必要とするため、
 // 個別に同じ引き算を重複させないよう共通化している。
-function getSundayOnOrBefore(date: Date): Date {
+export function getSundayOnOrBefore(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay());
 }
 

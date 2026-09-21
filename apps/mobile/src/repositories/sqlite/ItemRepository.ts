@@ -112,6 +112,14 @@ export class SQLiteItemRepository implements IItemRepository {
     }
   }
 
+  async findCompletionsInRange(startDate: string, endDate: string): Promise<{ itemId: number; date: string }[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    return this.db.getAllAsync<{ itemId: number; date: string }>(
+      'SELECT itemId, date FROM item_completions WHERE date BETWEEN ? AND ? ORDER BY date, itemId',
+      [startDate, endDate]
+    );
+  }
+
   async findCompletionsForDate(date: string): Promise<Set<number>> {
     if (!this.db) throw new Error('Database not initialized');
     const rows = await this.db.getAllAsync<Pick<ItemCompletion, 'itemId'>>(

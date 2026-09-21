@@ -1,3 +1,6 @@
+import { getGanttBarAppearance } from "../utils/ganttBars";
+import { CompletionStatsCard, CompletionStatusPill } from "../components/CompletionStatsCard";
+import { countCategoryOccurrences } from "../utils/completionStats";
 import { WeekTimeline } from "../components/WeekTimeline";
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
 import { useItemCompletions } from "../hooks/useItemCompletions";
@@ -13,7 +16,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect } from "@react-navigation/native";
-import type { SavedItem } from "@milkbox/shared";
+import type { Category, SavedItem } from "@milkbox/shared";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
@@ -61,6 +64,7 @@ const CalendarScreen = () => {
   const [visibleMonth, setVisibleMonth] = useState(() => startOfDay(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => startOfDay(new Date()));
   const [scheduleDisplayMode, setScheduleDisplayMode] = useState<"category" | "time">("category");
+  const [categories, setCategories] = useState<Category[]>([]);
   const [items, setItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -72,7 +76,8 @@ const CalendarScreen = () => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const result = await dbManager.itemRepository.findAllWithCategory();
+      const [result, categoryResult] = await Promise.all([dbManager.itemRepository.findAllWithCategory(), dbManager.categoryRepository.findAll()]);
+      setCategories(categoryResult);
       setItems(result);
       setErrorMessage(null);
     } catch (error) {
@@ -182,6 +187,10 @@ const CalendarScreen = () => {
     () => (scheduleDisplayMode === "time" ? sortScheduleItemsByTime(selectedItems) : []),
     [scheduleDisplayMode, selectedItems],
   );
+
+  const dayGroups = useMemo(() => countCategoryOccurrences(selectedItems, categories), [selectedItems, categories]);
+  const dayCompleted = useMemo(() => selectedItems.filter(item => completions.completedIds.has(item.id)).length,
+    [selectedItems, completions.completedIds]);
 
   const moveMonth = useCallback((diff: number) => {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + diff, 1));
@@ -346,10 +355,7 @@ const CalendarScreen = () => {
                                 height: BAR_H,
                                 marginLeft: padL,
                                 marginRight: padR,
-                                backgroundColor: bar.isWeekday ? `${taskColor}22` : taskColor,
-                                borderWidth: bar.isWeekday ? 1.5 : 0,
-                                borderColor: bar.isWeekday ? taskColor : "transparent",
-                                borderStyle: bar.isWeekday ? "dashed" : "solid",
+                                ...getGanttBarAppearance(taskColor, bar.isWeekday),
                                 borderTopLeftRadius: rL,
                                 borderBottomLeftRadius: rL,
                                 borderTopRightRadius: rR,
@@ -409,6 +415,7 @@ const CalendarScreen = () => {
             </Pressable>
           </View>
 
+          <CompletionStatsCard title="今日の進捗" completed={completions.disabled ? null : dayCompleted} total={selectedItems.length} groups={dayGroups} />
           <View style={styles.scheduleDisplayToggle} accessibilityRole="radiogroup">
             {(["category", "time"] as const).map((mode) => {
               const selected = scheduleDisplayMode === mode;
@@ -467,6 +474,7 @@ const CalendarScreen = () => {
                             {formatScheduleTime(item)}
                           </Text>
                           <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
+                          <CompletionStatusPill completed={completions.completedIds.has(item.id)} />
                         </View>
                         {isRange && item.startDate && item.endDate ? (
                           <Text style={localStyles.rangeDateText}>
@@ -518,6 +526,7 @@ const CalendarScreen = () => {
                               {formatScheduleTime(item)}
                             </Text>
                             <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
+                            <CompletionStatusPill completed={completions.completedIds.has(item.id)} />
                           </View>
                           {isRange && item.startDate && item.endDate ? (
                             <Text style={localStyles.rangeDateText}>
@@ -550,6 +559,7 @@ const CalendarScreen = () => {
                           {formatScheduleTime(item)}
                         </Text>
                         <Text style={[styles.scheduleText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
+                        <CompletionStatusPill completed={completions.completedIds.has(item.id)} />
                         {isRange && item.startDate && item.endDate ? (
                           <Text style={localStyles.rangeDateText}>
                             {toDateKey(item.startDate)} 〜 {toDateKey(item.endDate)}
