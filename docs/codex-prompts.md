@@ -141,6 +141,7 @@ milkbox リポジトリの [パッケージ名] を [バージョン/最新] に
 - 破壊的変更の有無を changelog/リリースノートで確認し、影響を受けるコードを洗い出す
 - pnpm-lock.yaml を更新する
 - `pnpm install` → `pnpm lint` / `pnpm check-types` / `pnpm test` が通ることを確認する
+- apps/mobile の依存を追加・更新した場合、`apps/mobile`で`pnpm generate-licenses`を実行し、`src/data/licenses.ts`(ライセンス情報画面のデータ)を最新化する。このスクリプトはEASビルド時(`eas-build-post-install`)には自動実行されるが、ローカルでの動作確認時には走らないため、依存変更時は手動実行が必須
 - apps/mobile の依存を更新した場合、`npx expo prebuild` で生成し直しても問題なくビルドできるか確認する(docs/build-android.md 参照)
 ```
 

@@ -2187,6 +2187,12 @@ export const licenses: LicenseEntry[] = [
     "licenseTextIndex": 123
   },
   {
+    "name": "expo-calendar",
+    "version": "15.0.8",
+    "license": "MIT",
+    "licenseTextIndex": 123
+  },
+  {
     "name": "expo-constants",
     "version": "18.0.13",
     "license": "MIT",
