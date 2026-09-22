@@ -30,6 +30,7 @@
     "@react-navigation/stack": "^7.8.6",
     "@repo/core": "workspace:*",
     "expo": "^54.0.35",
+    "expo-calendar": "~15.0.8",
     "expo-constants": "~18.0.13",
     "expo-notifications": "~0.32.17",
     "expo-splash-screen": "~31.0.13",

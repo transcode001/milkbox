@@ -32,6 +32,7 @@ describe("SQLite item completions", () => {
     db.exec("CREATE TABLE categories (id INTEGER PRIMARY KEY); INSERT INTO categories VALUES (1), (2);");
     await repository.initializeTable();
     await repository.initializeCompletionsTable();
+    await repository.initializeCalendarLinksTable();
     db.exec("INSERT INTO items (id, categoryId, text, date) VALUES (1, 1, 'a', '2026-09-13'), (2, 1, 'b', '2026-09-13'), (3, 2, 'c', '2026-09-13');");
   });
   afterEach(() => db.close());
@@ -113,5 +114,38 @@ describe("SQLite item completions", () => {
     db.exec("CREATE TRIGGER prevent_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'failed'); END;");
     await expect(repository.delete(1)).rejects.toThrow("failed");
     expect(await repository.findCompletionsForDate("2026-09-13")).toEqual(new Set([1]));
+  });
+
+  it("creates calendar links idempotently and removes an item's link in the delete transaction", async () => {
+    await repository.saveCalendarLink({ itemId: 1, provider: "device", externalEventId: "event-1" });
+    await repository.initializeCalendarLinksTable();
+    expect(await repository.findCalendarLink(1, "device")).toEqual({
+      itemId: 1,
+      provider: "device",
+      externalEventId: "event-1",
+    });
+
+    await repository.delete(1);
+    expect(await repository.findCalendarLink(1, "device")).toBeNull();
+  });
+
+  it("removes only the deleted category's calendar links", async () => {
+    await repository.saveCalendarLink({ itemId: 1, provider: "device", externalEventId: "event-1" });
+    await repository.saveCalendarLink({ itemId: 2, provider: "device", externalEventId: "event-2" });
+    await repository.saveCalendarLink({ itemId: 3, provider: "device", externalEventId: "event-3" });
+
+    await repository.deleteByCategoryId(1);
+
+    expect(await repository.findAllCalendarLinks("device")).toEqual([
+      { itemId: 3, provider: "device", externalEventId: "event-3" },
+    ]);
+  });
+
+  it("rolls back calendar-link cleanup when item deletion fails", async () => {
+    await repository.saveCalendarLink({ itemId: 1, provider: "device", externalEventId: "event-1" });
+    db.exec("CREATE TRIGGER prevent_calendar_item_delete BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'failed'); END;");
+
+    await expect(repository.delete(1)).rejects.toThrow("failed");
+    expect(await repository.findCalendarLink(1, "device")).not.toBeNull();
   });
 });

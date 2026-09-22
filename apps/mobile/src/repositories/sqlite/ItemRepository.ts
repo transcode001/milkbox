@@ -5,6 +5,12 @@ import { DEFAULT_COLORS } from '../../constants/colors';
 
 const DEFAULT_TASK_COLOR = DEFAULT_COLORS.task;
 
+export interface ItemCalendarLink {
+  itemId: number;
+  provider: string;
+  externalEventId: string;
+}
+
 type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
   notificationEnabled?: boolean | number;
   notificationMinutesBefore?: number | null;
@@ -97,6 +103,63 @@ export class SQLiteItemRepository implements IItemRepository {
         PRIMARY KEY (itemId, date)
       );
     `);
+  }
+
+  async initializeCalendarLinksTable(): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.execAsync(`
+      CREATE TABLE IF NOT EXISTS item_calendar_links (
+        itemId INTEGER NOT NULL,
+        provider TEXT NOT NULL,
+        externalEventId TEXT NOT NULL,
+        PRIMARY KEY (itemId, provider)
+      );
+    `);
+  }
+
+  async findCalendarLink(itemId: number, provider: string): Promise<ItemCalendarLink | null> {
+    if (!this.db) throw new Error('Database not initialized');
+    return (await this.db.getFirstAsync<ItemCalendarLink>(
+      'SELECT itemId, provider, externalEventId FROM item_calendar_links WHERE itemId = ? AND provider = ?',
+      [itemId, provider]
+    )) ?? null;
+  }
+
+  async findCalendarLinksByCategoryId(categoryId: number): Promise<ItemCalendarLink[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    return this.db.getAllAsync<ItemCalendarLink>(
+      'SELECT links.itemId, links.provider, links.externalEventId FROM item_calendar_links links INNER JOIN items ON items.id = links.itemId WHERE items.categoryId = ?',
+      [categoryId]
+    );
+  }
+
+  async findAllCalendarLinks(provider?: string): Promise<ItemCalendarLink[]> {
+    if (!this.db) throw new Error('Database not initialized');
+    if (provider) {
+      return this.db.getAllAsync<ItemCalendarLink>(
+        'SELECT itemId, provider, externalEventId FROM item_calendar_links WHERE provider = ?',
+        [provider]
+      );
+    }
+    return this.db.getAllAsync<ItemCalendarLink>(
+      'SELECT itemId, provider, externalEventId FROM item_calendar_links'
+    );
+  }
+
+  async saveCalendarLink(link: ItemCalendarLink): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync(
+      'INSERT OR REPLACE INTO item_calendar_links (itemId, provider, externalEventId) VALUES (?, ?, ?)',
+      [link.itemId, link.provider, link.externalEventId]
+    );
+  }
+
+  async deleteCalendarLink(itemId: number, provider: string): Promise<void> {
+    if (!this.db) throw new Error('Database not initialized');
+    await this.db.runAsync(
+      'DELETE FROM item_calendar_links WHERE itemId = ? AND provider = ?',
+      [itemId, provider]
+    );
   }
 
   async setCompletion(itemId: number, date: string, completed: boolean): Promise<void> {
@@ -210,6 +273,7 @@ export class SQLiteItemRepository implements IItemRepository {
   async clear(): Promise<void> {
     if (!this.db) throw new Error('Database not initialized');
     await this.db.execAsync('DELETE FROM item_completions;');
+    await this.db.execAsync('DELETE FROM item_calendar_links;');
     await this.db.execAsync('DROP TABLE IF EXISTS items');
     await this.initializeTable();
   }
@@ -345,6 +409,7 @@ export class SQLiteItemRepository implements IItemRepository {
     if (!this.db) throw new Error('Database not initialized');
     await this.db.withExclusiveTransactionAsync(async (transaction) => {
       await transaction.runAsync('DELETE FROM item_completions WHERE itemId = ?', [id]);
+      await transaction.runAsync('DELETE FROM item_calendar_links WHERE itemId = ?', [id]);
       await transaction.runAsync('DELETE FROM items WHERE id = ?', [id]);
     });
   }
@@ -354,6 +419,9 @@ export class SQLiteItemRepository implements IItemRepository {
     await this.db.withExclusiveTransactionAsync(async (transaction) => {
       await transaction.runAsync(
         'DELETE FROM item_completions WHERE itemId IN (SELECT id FROM items WHERE categoryId = ?)', [categoryId]
+      );
+      await transaction.runAsync(
+        'DELETE FROM item_calendar_links WHERE itemId IN (SELECT id FROM items WHERE categoryId = ?)', [categoryId]
       );
       await transaction.runAsync('DELETE FROM items WHERE categoryId = ?', [categoryId]);
     });

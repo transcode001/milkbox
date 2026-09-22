@@ -7,6 +7,11 @@ import {
   cancelTaskNotificationsAsync,
   scheduleTaskNotificationsAsync,
 } from '../../services/notifications';
+import {
+  deleteAllTaskCalendarEventsAsync,
+  deleteTaskCalendarEventAsync,
+  syncTaskCalendarAsync,
+} from '../../services/calendarSync';
 
 export class DatabaseManager {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -24,6 +29,20 @@ export class DatabaseManager {
     });
   }
 
+  private syncItemCalendar(item: SavedItem): void {
+    void this.withCategoryName(item).then((enrichedItem) =>
+      syncTaskCalendarAsync(enrichedItem, this.itemRepository)
+    ).catch((error: unknown) => {
+      console.warn(`Calendar sync failed for item ${item.id}`, error);
+    });
+  }
+
+  private async withCategoryName(item: SavedItem): Promise<SavedItem> {
+    if (!item.categoryId) return item;
+    const category = await this.categoryRepository.findById(item.categoryId);
+    return category ? { ...item, categoryName: category.name } : item;
+  }
+
   async initialize(): Promise<void> {
     this.db = await SQLite.openDatabaseAsync('milkbox.db');
     
@@ -34,10 +53,12 @@ export class DatabaseManager {
     await this.categoryRepository.initializeTable();
     await this.itemRepository.initializeTable();
     await this.itemRepository.initializeCompletionsTable();
+    await this.itemRepository.initializeCalendarLinksTable();
   }
 
   async clearAll(): Promise<void> {
     await cancelAllTaskNotificationsAsync();
+    await deleteAllTaskCalendarEventsAsync(this.itemRepository);
     // アイテムを先に削除（外部キー制約のため）
     await this.itemRepository.clear();
     await this.categoryRepository.clear();
@@ -46,6 +67,7 @@ export class DatabaseManager {
   async createItem(data: CreateItemDto): Promise<SavedItem> {
     const item = await this.itemRepository.create(data);
     this.scheduleItemNotifications(item);
+    this.syncItemCalendar(item);
     return item;
   }
 
@@ -58,6 +80,7 @@ export class DatabaseManager {
     const item = await this.itemRepository.findById(id);
     if (item) {
       this.scheduleItemNotifications(item);
+      this.syncItemCalendar(item);
     } else {
       await cancelTaskNotificationsAsync(id);
     }
@@ -80,11 +103,15 @@ export class DatabaseManager {
     const targets = await this.itemRepository.findByCategoryId(id);
     // 通知APIが応答を返さない環境（Expo Goを含む）でも、カテゴリ編集の保存を
     // ブロックしないよう再スケジュールはバックグラウンドで継続する。
-    targets.forEach((item) => this.scheduleItemNotifications(item));
+    targets.forEach((item) => {
+      this.scheduleItemNotifications(item);
+      this.syncItemCalendar(item);
+    });
   }
 
   async deleteItem(id: number): Promise<void> {
     await cancelTaskNotificationsAsync(id);
+    await deleteTaskCalendarEventAsync(id, this.itemRepository);
     await this.itemRepository.delete(id);
   }
 
@@ -93,6 +120,7 @@ export class DatabaseManager {
 
     for (const item of categoryItems) {
       await cancelTaskNotificationsAsync(item.id);
+      await deleteTaskCalendarEventAsync(item.id, this.itemRepository);
     }
     await this.itemRepository.deleteByCategoryId(categoryId);
   }
@@ -105,6 +133,17 @@ export class DatabaseManager {
         await scheduleTaskNotificationsAsync(item);
       } catch (error) {
         console.warn(`Notification sync failed for item ${item.id}`, error);
+      }
+    }
+  }
+
+  async syncTaskCalendars(): Promise<void> {
+    const items = await this.itemRepository.findAll();
+    for (const item of items) {
+      try {
+        await syncTaskCalendarAsync(await this.withCategoryName(item), this.itemRepository);
+      } catch (error) {
+        console.warn(`Calendar sync failed for item ${item.id}`, error);
       }
     }
   }

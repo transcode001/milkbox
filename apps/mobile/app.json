@@ -6,7 +6,12 @@
     "orientation": "portrait",
     "newArchEnabled": true,
     "ios": {
-      "bundleIdentifier": "com.transcode001.milkbox"
+      "bundleIdentifier": "com.transcode001.milkbox",
+      "infoPlist": {
+        "NSCalendarsUsageDescription": "Milkboxで選択したカレンダーを表示し、タスクの予定を追加・更新・削除するためにカレンダーへのアクセスが必要です。",
+        "NSCalendarsFullAccessUsageDescription": "Milkboxで同期先を選択し、タスクの予定を追加・更新・削除するためにカレンダーへのフルアクセスが必要です。",
+        "NSCalendarsWriteOnlyAccessUsageDescription": "Milkboxのタスクを、選択した端末カレンダーへ予定として追加するためにアクセスが必要です。"
+      }
     },
     "android": {
       "package": "com.transcode001.milkbox"
@@ -14,7 +19,13 @@
     "plugins": [
       "@react-native-community/datetimepicker",
       "expo-sqlite",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "Milkboxで同期先を選択し、タスクの予定を追加・更新・削除するためにカレンダーへのフルアクセスが必要です。"
+        }
+      ]
     ],
     "extra": {
       "eas": {
