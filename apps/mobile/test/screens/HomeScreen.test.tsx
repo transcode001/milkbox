@@ -189,3 +189,144 @@ describe("HomeScreen recurrence editing", () => {
     });
   });
 });
+
+// SectionList内の描画順を確認するため、レンダー結果からテキストだけを
+// 出現順に連結して取り出す。同じテキストが複数出ない前提で使う。
+function flattenText(node: unknown): string {
+  if (node == null || typeof node === "boolean") return "";
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(flattenText).join("");
+  if (typeof node === "object" && "children" in node) {
+    return flattenText((node as { children: unknown }).children);
+  }
+  return "";
+}
+
+describe("HomeScreen search", () => {
+  beforeEach(() => {
+    mockTagRepository.findAllItemTags.mockReset().mockResolvedValue([
+      { itemId: 3, tag: { id: 1, name: "急ぎ" } },
+    ]);
+    mockItemRepository.findAllWithCategory.mockReset().mockResolvedValue([
+      { ...baseItem, id: 1, text: "牛乳を買う", categoryId: 1, categoryName: "買い物" },
+      { ...baseItem, id: 2, text: "洗濯する", categoryId: 1, categoryName: "買い物" },
+      { ...baseItem, id: 3, text: "掃除する", categoryId: 2, categoryName: "家事" },
+    ]);
+  });
+
+  it("filters items by text and hides categories left with no matches", async () => {
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("牛乳を買う"));
+
+    fireEvent.changeText(getByPlaceholderText("タスクやタグを検索"), "洗濯");
+
+    await waitFor(() => expect(queryByText("牛乳を買う")).toBeNull());
+    expect(getByText("洗濯する")).toBeTruthy();
+    expect(queryByText("掃除する")).toBeNull();
+    // 「家事」カテゴリは該当タスクが無くなるのでヘッダーごと消える。
+    expect(queryByText("家事")).toBeNull();
+  });
+
+  it("filters items by tag name", async () => {
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("牛乳を買う"));
+
+    fireEvent.changeText(getByPlaceholderText("タスクやタグを検索"), "急ぎ");
+
+    await waitFor(() => expect(getByText("掃除する")).toBeTruthy());
+    expect(queryByText("牛乳を買う")).toBeNull();
+    expect(queryByText("洗濯する")).toBeNull();
+  });
+
+  it("reveals matches inside a collapsed category while searching", async () => {
+    const { getByText, getByPlaceholderText, queryByText } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("家事"));
+
+    fireEvent.press(getByText("家事"));
+    expect(queryByText("掃除する")).toBeNull();
+
+    fireEvent.changeText(getByPlaceholderText("タスクやタグを検索"), "掃除");
+
+    await waitFor(() => expect(getByText("掃除する")).toBeTruthy());
+  });
+
+  it("clears the query and restores the full list", async () => {
+    const { getByText, getByPlaceholderText, getByLabelText, queryByText } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    fireEvent.changeText(getByPlaceholderText("タスクやタグを検索"), "洗濯");
+    await waitFor(() => expect(queryByText("牛乳を買う")).toBeNull());
+
+    fireEvent.press(getByLabelText("検索をクリア"));
+
+    await waitFor(() => expect(getByText("牛乳を買う")).toBeTruthy());
+    expect(getByText("掃除する")).toBeTruthy();
+  });
+});
+
+describe("HomeScreen sort", () => {
+  it("keeps insertion order for 追加順 (the default)", async () => {
+    mockItemRepository.findAllWithCategory.mockResolvedValue([
+      { ...baseItem, id: 1, text: "Bタスク", categoryId: 1, categoryName: "買い物", priority: "low" },
+      { ...baseItem, id: 2, text: "Aタスク", categoryId: 1, categoryName: "買い物", priority: "high" },
+    ]);
+    const { getByText, toJSON } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("Bタスク"));
+
+    const text = flattenText(toJSON());
+    expect(text.indexOf("Bタスク")).toBeLessThan(text.indexOf("Aタスク"));
+  });
+
+  it("reorders items by priority (high before low) when 優先度順 is selected", async () => {
+    mockItemRepository.findAllWithCategory.mockResolvedValue([
+      { ...baseItem, id: 1, text: "Bタスク", categoryId: 1, categoryName: "買い物", priority: "low" },
+      { ...baseItem, id: 2, text: "Aタスク", categoryId: 1, categoryName: "買い物", priority: "high" },
+    ]);
+    const { getByText, getByLabelText, toJSON } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("Bタスク"));
+
+    fireEvent.press(getByLabelText("並び替え"));
+    fireEvent.press(getByText("優先度順"));
+
+    await waitFor(() => {
+      const text = flattenText(toJSON());
+      expect(text.indexOf("Aタスク")).toBeLessThan(text.indexOf("Bタスク"));
+    });
+  });
+
+  it("reorders items alphabetically when 名前順 is selected", async () => {
+    mockItemRepository.findAllWithCategory.mockResolvedValue([
+      { ...baseItem, id: 1, text: "Bタスク", categoryId: 1, categoryName: "買い物" },
+      { ...baseItem, id: 2, text: "Aタスク", categoryId: 1, categoryName: "買い物" },
+    ]);
+    const { getByText, getByLabelText, toJSON } = render(
+      <HomeScreen navigation={navigation} route={{ key: "home", name: "Home" }} />,
+    );
+    await waitFor(() => expect(mockItemRepository.findAllWithCategory).toHaveBeenCalled());
+    await waitFor(() => getByText("Bタスク"));
+
+    fireEvent.press(getByLabelText("並び替え"));
+    fireEvent.press(getByText("名前順"));
+
+    await waitFor(() => {
+      const text = flattenText(toJSON());
+      expect(text.indexOf("Aタスク")).toBeLessThan(text.indexOf("Bタスク"));
+    });
+  });
+});

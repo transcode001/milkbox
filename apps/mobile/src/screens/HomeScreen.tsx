@@ -31,7 +31,7 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import { DEFAULT_PRIORITY, resolveReminderMinutesToRestore, type Category, type Priority, type Recurrence, type SavedItem, type Tag } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, PRIORITY_OPTIONS, resolveReminderMinutesToRestore, type Category, type Priority, type Recurrence, type SavedItem, type Tag } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
@@ -53,6 +53,20 @@ type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
   NativeStackScreenProps<RootStackParamList>
 >;
+
+type SortOrder = "default" | "priority" | "name";
+
+const SORT_OPTIONS: { value: SortOrder; label: string }[] = [
+  { value: "default", label: "追加順" },
+  { value: "priority", label: "優先度順" },
+  { value: "name", label: "名前順" },
+];
+
+// PRIORITY_OPTIONSは高→中→低の順で定義されているため、その並びをそのまま
+// 比較用の順位に変換する(優先度の値自体は増減の意味を持たない文字列のため)。
+const PRIORITY_RANK: Record<Priority, number> = Object.fromEntries(
+  PRIORITY_OPTIONS.map((option, index) => [option.value, index]),
+) as Record<Priority, number>;
 
 // ベルアイコンで示す「通知タイミング」欄の有効時の色。#333は他の暗めの本文色
 // (dateSelectorButtonTextなど)と同じくFigma上のraw hexで、textPrimary(黒)/
@@ -116,6 +130,9 @@ const HomeScreen = ({ navigation }: Props) => {
   // Undoできるようにする(visibleSectionsで実際のフィルタを行う)。
   const [pendingDelete, setPendingDelete] = useState<SavedItem | null>(null);
   const pendingDeleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("default");
+  const [isSortListOpen, setIsSortListOpen] = useState(false);
 
   const loadItems = useCallback(async () => {
     // 通知トグルの楽観的更新(handleToggleItemNotification)がDB書き込み中に、
@@ -484,29 +501,58 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const categoryById = new Map(categories.map((category) => [category.id, category]));
 
-  const visibleSections = useMemo(() => sections.map((section) => {
-    const categoryId = section.data[0]?.categoryId;
-    const key = categoryId != null ? String(categoryId) : UNCATEGORIZED_KEY;
-    const category = categories.find((candidate) => candidate.id === categoryId);
-    const collapsed = collapsedSectionKeys.has(key);
-    // 閉じてもカテゴリ情報と曜日表示を失わないよう、元のdataからメタデータを保持する。
-    // 保留中削除のアイテムはUndo猶予の間、実データ(sections)には残したまま
-    // 表示だけ隠す。loadItems()がフォーカス復帰等で再実行されて元データが
-    // 更新されても、pendingDeleteが残っていれば引き続き非表示にできる。
-    const data = collapsed
-      ? []
-      : pendingDelete
-        ? section.data.filter((item) => item.id !== pendingDelete.id)
-        : section.data;
-    return {
-      ...section,
-      key,
-      categoryId,
-      weekdayLabels: formatCategoryWeekdays(section, category),
-      collapsed,
-      data,
+  const isSearching = searchQuery.trim().length > 0;
+
+  const sortItems = (items: SavedItem[]): SavedItem[] => {
+    if (sortOrder === "default") return items;
+    const sorted = [...items];
+    if (sortOrder === "priority") {
+      sorted.sort((left, right) => PRIORITY_RANK[left.priority] - PRIORITY_RANK[right.priority]);
+    } else {
+      sorted.sort((left, right) => left.text.localeCompare(right.text, "ja"));
+    }
+    return sorted;
+  };
+
+  const visibleSections = useMemo(() => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const matchesSearch = (item: SavedItem) => {
+      if (!isSearching) return true;
+      if (item.text.toLowerCase().includes(normalizedQuery)) return true;
+      return (item.tags ?? []).some((tag) => tag.name.toLowerCase().includes(normalizedQuery));
     };
-  }), [sections, categories, collapsedSectionKeys, pendingDelete]);
+
+    return sections
+      .map((section) => {
+        const categoryId = section.data[0]?.categoryId;
+        const key = categoryId != null ? String(categoryId) : UNCATEGORIZED_KEY;
+        const category = categories.find((candidate) => candidate.id === categoryId);
+        // 検索中は、絞り込んだ結果を見せるためセクションの折りたたみを無視する
+        // (閉じたセクションの中に検索対象があっても見えなくなってしまうため)。
+        const collapsed = collapsedSectionKeys.has(key) && !isSearching;
+        // 閉じてもカテゴリ情報と曜日表示を失わないよう、元のdataからメタデータを保持する。
+        // 保留中削除のアイテムはUndo猶予の間、実データ(sections)には残したまま
+        // 表示だけ隠す。loadItems()がフォーカス復帰等で再実行されて元データが
+        // 更新されても、pendingDeleteが残っていれば引き続き非表示にできる。
+        const filtered = section.data
+          .filter((item) => (pendingDelete ? item.id !== pendingDelete.id : true))
+          .filter(matchesSearch);
+        const data = collapsed ? [] : sortItems(filtered);
+        return {
+          ...section,
+          key,
+          categoryId,
+          weekdayLabels: formatCategoryWeekdays(section, category),
+          collapsed,
+          data,
+        };
+      })
+      // 検索中、該当する予定が1件も無いカテゴリのヘッダーごと隠す。
+      .filter((section) => !isSearching || section.data.length > 0);
+    // sortItems/matchesSearchはコンポーネント直下で毎レンダー再生成される関数だが、
+    // 実体はsortOrder/isSearching/searchQueryにしか依存しないため、依存配列には
+    // それらの値だけを列挙する(関数そのものを依存に含めると無限に再計算される)。
+  }, [sections, categories, collapsedSectionKeys, pendingDelete, isSearching, searchQuery, sortOrder]);
 
   const toggleSection = (key: string) => {
     setCollapsedSectionKeys((current) => {
@@ -660,6 +706,41 @@ const HomeScreen = ({ navigation }: Props) => {
             <Ionicons name="settings-outline" size={24} color="#333" />
           </TouchableOpacity>
         </View>
+      </View>
+
+      <View style={styles.searchRow}>
+        <View style={styles.searchInputContainer}>
+          <Ionicons name="search-outline" size={16} color={colors.textSecondary} />
+          <TextInput
+            style={styles.searchInput}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="タスクやタグを検索"
+            returnKeyType="search"
+          />
+          {searchQuery.length > 0 ? (
+            <TouchableOpacity
+              onPress={() => setSearchQuery("")}
+              accessibilityRole="button"
+              accessibilityLabel="検索をクリア"
+            >
+              <Ionicons name="close-circle" size={16} color={colors.textSecondary} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+        <SelectModal
+          options={SORT_OPTIONS}
+          selectedValue={sortOrder}
+          selectedLabel={SORT_OPTIONS.find((option) => option.value === sortOrder)?.label ?? ""}
+          isOpen={isSortListOpen}
+          accessibilityLabel="並び替え"
+          onToggle={() => setIsSortListOpen((current) => !current)}
+          onClose={() => setIsSortListOpen(false)}
+          onSelect={(value) => {
+            setSortOrder(value as SortOrder);
+            setIsSortListOpen(false);
+          }}
+        />
       </View>
 
       {!notificationsEnabled && (
