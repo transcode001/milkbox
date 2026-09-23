@@ -1,6 +1,7 @@
 import type { SavedItem } from "@milkbox/shared";
 import { createDateKey, parseItemDate, parsePointDate } from "./calendarDates";
 import { isMultiDayRange } from "./scheduleGrouping";
+import { occursOnDate } from "./recurrence";
 import { parseWeekdays } from "./weekdays";
 
 export const HOUR_HEIGHT = 40;
@@ -29,8 +30,11 @@ export function getDayEvents(items: SavedItem[], day: Date): { timed: DayEvent[]
   const key = createDateKey(day);
   for (const item of items) {
     const weekdays = parseWeekdays(item.weekdays);
+    const recurring = Boolean(item.recurrence);
     if (weekdays.length > 0) {
       if (!weekdays.includes(day.getDay())) continue;
+    } else if (recurring) {
+      if (!occursOnDate(item, day)) continue;
     } else if (isMultiDayRange(item)) {
       const start = parseItemDate(item.startDate)!;
       const end = parseItemDate(item.endDate)!;
@@ -44,7 +48,10 @@ export function getDayEvents(items: SavedItem[], day: Date): { timed: DayEvent[]
 
     let start = minutesOfDay(item.startDate);
     const end = minutesOfDay(item.endDate);
-    if (start === null && end === null && weekdays.length === 0) {
+    // 曜日繰り返し・その他の繰り返しはitem.dateが実際の発生時刻ではなく作成時刻でしか
+    // ないため、時刻ありのstartDate/endDateが無ければ終日扱いにする(item.dateへは
+    // フォールバックしない)。
+    if (start === null && end === null && weekdays.length === 0 && !recurring) {
       start = minutesOfDay(item.date);
     }
     if (start === null && end === null) {

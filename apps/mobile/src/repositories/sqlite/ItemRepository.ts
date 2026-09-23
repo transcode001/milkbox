@@ -1,6 +1,6 @@
 // apps/mobile/src/repositories/sqlite/ItemRepository.ts
 import * as SQLite from 'expo-sqlite';
-import { DEFAULT_REMINDER_MINUTES, IItemRepository, ItemCompletion, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_PRIORITY, DEFAULT_REMINDER_MINUTES, IItemRepository, isPriority, isRecurrence, ItemCompletion, Priority, Recurrence, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 import { DEFAULT_COLORS } from '../../constants/colors';
 
 const DEFAULT_TASK_COLOR = DEFAULT_COLORS.task;
@@ -11,10 +11,27 @@ export interface ItemCalendarLink {
   externalEventId: string;
 }
 
-type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
+type SQLiteSavedItemRow = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore' | 'priority' | 'recurrence'> & {
   notificationEnabled?: boolean | number;
   notificationMinutesBefore?: number | null;
+  priority?: Priority | null;
+  // DBにはJSON文字列で保存する。recurrenceカラムはpriorityと違いNULL許容(繰り返し無しの表現)。
+  recurrence?: string | null;
 };
+
+function serializeRecurrence(recurrence: Recurrence | null | undefined): string | null {
+  return recurrence ? JSON.stringify(recurrence) : null;
+}
+
+function parseRecurrence(value?: string | null): Recurrence | undefined {
+  if (!value) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return isRecurrence(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 export class SQLiteItemRepository implements IItemRepository {
   private db: SQLite.SQLiteDatabase | null = null;
@@ -60,6 +77,8 @@ export class SQLiteItemRepository implements IItemRepository {
     const notificationMinutesBeforeColumn = tableInfo.find(
       (column) => column.name === 'notificationMinutesBefore'
     );
+    const priorityColumn = tableInfo.find((column) => column.name === 'priority');
+    const recurrenceColumn = tableInfo.find((column) => column.name === 'recurrence');
 
     if (!weekdaysColumn) {
       await this.db.execAsync('ALTER TABLE items ADD COLUMN weekdays TEXT;');
@@ -81,6 +100,18 @@ export class SQLiteItemRepository implements IItemRepository {
       await this.db.execAsync(
         'ALTER TABLE items ADD COLUMN notificationMinutesBefore INTEGER NOT NULL DEFAULT 30;'
       );
+    }
+
+    if (!priorityColumn) {
+      // DBのデフォルト値はDEFAULT_PRIORITY('medium')とリテラルで一致させている。
+      await this.db.execAsync(
+        "ALTER TABLE items ADD COLUMN priority TEXT NOT NULL DEFAULT 'medium';"
+      );
+    }
+
+    if (!recurrenceColumn) {
+      // weekdaysと違いこちらはNULL許容(既定値=繰り返し無し)。
+      await this.db.execAsync('ALTER TABLE items ADD COLUMN recurrence TEXT;');
     }
 
     // Migrate older table definitions where categoryId was NOT NULL.
@@ -248,12 +279,14 @@ export class SQLiteItemRepository implements IItemRepository {
           color TEXT,
           notificationEnabled INTEGER NOT NULL DEFAULT 1,
           notificationMinutesBefore INTEGER NOT NULL DEFAULT 30,
+          priority TEXT NOT NULL DEFAULT 'medium',
+          recurrence TEXT,
           FOREIGN KEY (categoryId) REFERENCES categories(id)
         );
       `);
       await this.db.execAsync(`
-        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore)
-        SELECT id, categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore FROM items;
+        INSERT INTO items_new (id, categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore, priority, recurrence)
+        SELECT id, categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore, priority, recurrence FROM items;
       `);
       await this.db.execAsync('DROP TABLE IF EXISTS items;');
       await this.db.execAsync('ALTER TABLE items_new RENAME TO items;');
@@ -267,6 +300,10 @@ export class SQLiteItemRepository implements IItemRepository {
       notificationEnabled:
         row.notificationEnabled !== false && row.notificationEnabled !== 0,
       notificationMinutesBefore: row.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
+      // DBが壊れて未知の文字列が入っていた場合でも、優先度ドットの色解決(PRIORITY_COLORS)が
+      // undefinedにならないよう既定値へフォールバックする。
+      priority: isPriority(row.priority) ? row.priority : DEFAULT_PRIORITY,
+      recurrence: parseRecurrence(row.recurrence),
     };
   }
 
@@ -309,6 +346,8 @@ export class SQLiteItemRepository implements IItemRepository {
         items.color,
         items.notificationEnabled,
         items.notificationMinutesBefore,
+        items.priority,
+        items.recurrence,
         categories.name as categoryName,
         categories.color as categoryColor
       FROM items
@@ -332,22 +371,44 @@ export class SQLiteItemRepository implements IItemRepository {
     const notificationEnabled = data.notificationEnabled !== false;
     const color = data.color ?? DEFAULT_TASK_COLOR;
     const notificationMinutesBefore = data.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES;
-    const result = await this.db.runAsync(
-      'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [
-        data.categoryId ?? null,
-        data.text,
-        data.date,
-        data.startDate ?? null,
-        data.endDate ?? null,
-        data.weekdays ?? null,
-        color,
-        notificationEnabled ? 1 : 0,
-        notificationMinutesBefore,
-      ]
-    );
+    const priority = data.priority ?? DEFAULT_PRIORITY;
+    const recurrence = data.recurrence;
+    let insertedId = 0;
+
+    // tagIdsの紐付け(item_tagsへのINSERT)は、本体のINSERTと同一トランザクションで
+    // 行う。別トランザクションに分けると、タグ紐付けだけ失敗/成功して本体との
+    // 整合性が崩れる(例: 再試行で重複タスクが作られる)ため。
+    await this.db.withExclusiveTransactionAsync(async (transaction) => {
+      const result = await transaction.runAsync(
+        'INSERT INTO items (categoryId, text, date, startDate, endDate, weekdays, color, notificationEnabled, notificationMinutesBefore, priority, recurrence) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [
+          data.categoryId ?? null,
+          data.text,
+          data.date,
+          data.startDate ?? null,
+          data.endDate ?? null,
+          data.weekdays ?? null,
+          color,
+          notificationEnabled ? 1 : 0,
+          notificationMinutesBefore,
+          priority,
+          serializeRecurrence(recurrence),
+        ]
+      );
+      insertedId = result.lastInsertRowId;
+
+      if (data.tagIds !== undefined) {
+        for (const tagId of data.tagIds) {
+          await transaction.runAsync(
+            'INSERT OR IGNORE INTO item_tags (itemId, tagId) VALUES (?, ?)',
+            [insertedId, tagId]
+          );
+        }
+      }
+    });
+
     return {
-      id: result.lastInsertRowId,
+      id: insertedId,
       categoryId: data.categoryId,
       text: data.text,
       date: data.date,
@@ -357,6 +418,8 @@ export class SQLiteItemRepository implements IItemRepository {
       color,
       notificationEnabled,
       notificationMinutesBefore,
+      priority,
+      recurrence,
     };
   }
 
@@ -397,12 +460,40 @@ export class SQLiteItemRepository implements IItemRepository {
       updates.push('color = ?');
       params.push(data.color);
     }
-    if (updates.length === 0) return;
+    if (data.priority !== undefined) {
+      updates.push('priority = ?');
+      params.push(data.priority);
+    }
+    if (data.recurrence !== undefined) {
+      updates.push('recurrence = ?');
+      params.push(serializeRecurrence(data.recurrence));
+    }
 
-    await this.db.runAsync(
-      `UPDATE items SET ${updates.join(', ')} WHERE id = ?`,
-      [...params, id]
-    );
+    const hasFieldUpdates = updates.length > 0;
+    const hasTagUpdate = data.tagIds !== undefined;
+    if (!hasFieldUpdates && !hasTagUpdate) return;
+
+    // create()と同じ理由で、本体のUPDATEとitem_tagsの置き換えを同一トランザクションに
+    // まとめる。別トランザクションのままだと、本体だけ更新されタグは旧状態、という
+    // 部分成功が起こり得る。
+    await this.db.withExclusiveTransactionAsync(async (transaction) => {
+      if (hasFieldUpdates) {
+        await transaction.runAsync(
+          `UPDATE items SET ${updates.join(', ')} WHERE id = ?`,
+          [...params, id]
+        );
+      }
+
+      if (hasTagUpdate) {
+        await transaction.runAsync('DELETE FROM item_tags WHERE itemId = ?', [id]);
+        for (const tagId of data.tagIds ?? []) {
+          await transaction.runAsync(
+            'INSERT OR IGNORE INTO item_tags (itemId, tagId) VALUES (?, ?)',
+            [id, tagId]
+          );
+        }
+      }
+    });
   }
 
   async delete(id: number): Promise<void> {
@@ -410,6 +501,7 @@ export class SQLiteItemRepository implements IItemRepository {
     await this.db.withExclusiveTransactionAsync(async (transaction) => {
       await transaction.runAsync('DELETE FROM item_completions WHERE itemId = ?', [id]);
       await transaction.runAsync('DELETE FROM item_calendar_links WHERE itemId = ?', [id]);
+      await transaction.runAsync('DELETE FROM item_tags WHERE itemId = ?', [id]);
       await transaction.runAsync('DELETE FROM items WHERE id = ?', [id]);
     });
   }
@@ -422,6 +514,9 @@ export class SQLiteItemRepository implements IItemRepository {
       );
       await transaction.runAsync(
         'DELETE FROM item_calendar_links WHERE itemId IN (SELECT id FROM items WHERE categoryId = ?)', [categoryId]
+      );
+      await transaction.runAsync(
+        'DELETE FROM item_tags WHERE itemId IN (SELECT id FROM items WHERE categoryId = ?)', [categoryId]
       );
       await transaction.runAsync('DELETE FROM items WHERE categoryId = ?', [categoryId]);
     });

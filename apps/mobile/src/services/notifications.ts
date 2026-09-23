@@ -3,6 +3,7 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { DEFAULT_REMINDER_MINUTES, type SavedItem } from "@milkbox/shared";
 import { parseWeekdays } from "../utils/weekdays";
+import { findNextOccurrence } from "../utils/recurrence";
 import { colors } from "../styles/tokens";
 
 const NOTIFICATION_IDS_STORAGE_KEY = "@milkbox_notification_ids";
@@ -140,6 +141,49 @@ function createEventMomentDate(item: SavedItem): Date | null {
   return null;
 }
 
+// 隔週/毎月/N日ごとの「発生日」に、その繰り返しの時刻(startDateに時刻が
+// 含まれていればそれ、無ければ曜日繰り返しと同じREMINDER_HOUR:00)を合成する。
+function createRecurrenceEventMomentDate(item: SavedItem, occurrence: Date): Date {
+  const hasTime = item.startDate?.includes("T") || item.startDate?.includes(" ");
+  const time = hasTime ? new Date(item.startDate!) : null;
+  return new Date(
+    occurrence.getFullYear(),
+    occurrence.getMonth(),
+    occurrence.getDate(),
+    time ? time.getHours() : REMINDER_HOUR,
+    time ? time.getMinutes() : 0,
+    0,
+    0,
+  );
+}
+
+// 隔週/毎月/N日ごとはWEEKLYのようなOSネイティブの「毎回」トリガーが無い
+// (TIME_INTERVALのrepeats:trueは常に同じ秒数を繰り返すだけで、次回起動時の
+// 再スケジュールのたびに「今から◯日後」へ位相がずれてしまう)ため、
+// 直近1回分だけをDATEトリガーで予約する。scheduleTaskNotificationsAsync()は
+// アイテムの作成・編集のたびと、アプリ起動時のsyncTaskNotifications()で
+// 呼ばれるため、その都度「次の発生日」で予約し直される。アプリを長期間
+// 開かなかった場合、その間の発生分がまとめて1回にはならない
+// (直近1回だけ鳴って、その次はアプリ再起動まで予約されない)点は既知の制約。
+function resolveNextReminderDate(item: SavedItem): Date | null {
+  const offsetMinutes = getNotificationMinutesBefore(item);
+  let searchFrom = new Date();
+
+  // biweekly(14日)・monthly(最大31日)・everyNDays(N日)のいずれも、直近の
+  // 発生日の通知時刻が既に過ぎていれば次の発生日を探す。上限は無限ループ防止用。
+  for (let guard = 0; guard < 500; guard++) {
+    const occurrence = findNextOccurrence(item, searchFrom);
+    if (!occurrence) return null;
+
+    const eventMoment = createRecurrenceEventMomentDate(item, occurrence);
+    const reminderDate = new Date(eventMoment.getTime() - offsetMinutes * 60 * 1000);
+    if (reminderDate.getTime() > Date.now()) return reminderDate;
+
+    searchFrom = new Date(occurrence.getFullYear(), occurrence.getMonth(), occurrence.getDate() + 1);
+  }
+  return null;
+}
+
 function getNotificationMinutesBefore(item: SavedItem): number {
   // notificationEnabled=falseの場合、DB上のnotificationMinutesBeforeは「なし」の番兵値(-1)を
   // 保持していることがある。呼び出し元は必ずnotificationEnabledで先にガードするが、
@@ -189,6 +233,10 @@ export function shouldScheduleNotification(item: SavedItem): boolean {
   if (weekdays.length > 0) {
     // 曜日繰り返しは常に対象（直近の発生日が必ず未来にあるため）
     return true;
+  }
+
+  if (item.recurrence) {
+    return resolveNextReminderDate(item) !== null;
   }
 
   const reminderDate = createReminderDate(item);
@@ -251,6 +299,19 @@ export async function scheduleTaskNotificationsAsync(item: SavedItem): Promise<s
         );
         throw error;
       }
+    } else if (item.recurrence) {
+      const reminderDate = resolveNextReminderDate(item);
+      if (!reminderDate) return [];
+
+      const identifier = await Notifications.scheduleNotificationAsync({
+        content,
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: reminderDate,
+          channelId: TASK_REMINDERS_CHANNEL_ID,
+        },
+      });
+      identifiers.push(identifier);
     } else {
       const reminderDate = createReminderDate(item);
       if (!reminderDate || reminderDate.getTime() <= Date.now()) return [];

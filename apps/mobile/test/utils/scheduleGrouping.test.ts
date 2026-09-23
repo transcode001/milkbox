@@ -1,4 +1,4 @@
-import type { SavedItem } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, type SavedItem } from "@milkbox/shared";
 import {
   formatScheduleTime,
   formatTimeOfDay,
@@ -13,6 +13,7 @@ const baseItem: SavedItem = {
   date: "2026-01-06T00:00:00",
   notificationEnabled: true,
   notificationMinutesBefore: 30,
+  priority: DEFAULT_PRIORITY,
 };
 
 describe("formatTimeOfDay", () => {

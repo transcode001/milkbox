@@ -2,6 +2,7 @@ import * as SQLite from 'expo-sqlite';
 import type { CreateItemDto, SavedItem, UpdateItemDto } from '@milkbox/shared';
 import { SQLiteItemRepository } from './ItemRepository';
 import { SQLiteCategoryRepository } from './CategoryRepository';
+import { SQLiteTagRepository } from './TagRepository';
 import {
   cancelAllTaskNotificationsAsync,
   cancelTaskNotificationsAsync,
@@ -17,10 +18,12 @@ export class DatabaseManager {
   private db: SQLite.SQLiteDatabase | null = null;
   public itemRepository: SQLiteItemRepository;
   public categoryRepository: SQLiteCategoryRepository;
+  public tagRepository: SQLiteTagRepository;
 
   constructor() {
     this.itemRepository = new SQLiteItemRepository();
     this.categoryRepository = new SQLiteCategoryRepository();
+    this.tagRepository = new SQLiteTagRepository();
   }
 
   private scheduleItemNotifications(item: SavedItem): void {
@@ -48,12 +51,15 @@ export class DatabaseManager {
     
     await this.itemRepository.setDatabase(this.db);
     await this.categoryRepository.setDatabase(this.db);
-    
+    await this.tagRepository.setDatabase(this.db);
+
     // カテゴリテーブルを先に作成（外部キー制約のため）
     await this.categoryRepository.initializeTable();
     await this.itemRepository.initializeTable();
     await this.itemRepository.initializeCompletionsTable();
     await this.itemRepository.initializeCalendarLinksTable();
+    await this.tagRepository.initializeTable();
+    await this.tagRepository.initializeItemTagsTable();
   }
 
   async clearAll(): Promise<void> {
@@ -62,10 +68,16 @@ export class DatabaseManager {
     // アイテムを先に削除（外部キー制約のため）
     await this.itemRepository.clear();
     await this.categoryRepository.clear();
+    await this.tagRepository.clear();
   }
 
   async createItem(data: CreateItemDto): Promise<SavedItem> {
+    // tagIdsの紐付けはitemRepository.create()内で本体のINSERTと同一トランザクションに
+    // まとめている(部分成功を避けるため)。ここでの findTagsForItem は確定後の読み出しだけ。
     const item = await this.itemRepository.create(data);
+    if (data.tagIds !== undefined) {
+      item.tags = await this.tagRepository.findTagsForItem(item.id);
+    }
     this.scheduleItemNotifications(item);
     this.syncItemCalendar(item);
     return item;
@@ -73,8 +85,9 @@ export class DatabaseManager {
 
   // 注意: タスク編集機能を実装する場合、itemRepository.update() を直接呼ばずに
   // 必ず DatabaseManager.updateItem() を使用すること。
-  // UpdateItemDto は text・notificationEnabled・startDate・endDate・weekdays・categoryId を更新できる。
-  // updateItem() は更新後に通知の再スケジュール（scheduleTaskNotificationsAsync）まで行う。
+  // UpdateItemDto は text・notificationEnabled・startDate・endDate・weekdays・categoryId・color・priority・tagIds を更新できる。
+  // tagIdsの置き換えもitemRepository.update()内で本体のUPDATEと同一トランザクションに
+  // まとめている。updateItem() は更新後に通知の再スケジュール（scheduleTaskNotificationsAsync）まで行う。
   async updateItem(id: number, data: UpdateItemDto): Promise<void> {
     await this.itemRepository.update(id, data);
     const item = await this.itemRepository.findById(id);
@@ -88,7 +101,7 @@ export class DatabaseManager {
 
   // 注意: カテゴリ編集機能を実装する場合、categoryRepository.update() を直接呼ばずに
   // 必ず DatabaseManager.updateCategory() を使用すること。
-  // updateCategory() はカテゴリ配下の全サブタスクの通知を再スケジュールする。
+  // updateCategory() はカテゴリ配下の全タスクの通知を再スケジュールする。
   async updateCategory(
     id: number,
     name?: string,
@@ -112,6 +125,9 @@ export class DatabaseManager {
   async deleteItem(id: number): Promise<void> {
     await cancelTaskNotificationsAsync(id);
     await deleteTaskCalendarEventAsync(id, this.itemRepository);
+    // item_tagsの削除はitemRepository.delete()がitems/item_completions/item_calendar_links
+    // と同一トランザクションで行う。ここで別途呼ぶと、後続のdelete()が失敗した時に
+    // タグ紐付けだけ消えたタスクが残ってしまう。
     await this.itemRepository.delete(id);
   }
 
@@ -122,6 +138,7 @@ export class DatabaseManager {
       await cancelTaskNotificationsAsync(item.id);
       await deleteTaskCalendarEventAsync(item.id, this.itemRepository);
     }
+    // item_tagsの削除はitemRepository.deleteByCategoryId()が同一トランザクションで行う。
     await this.itemRepository.deleteByCategoryId(categoryId);
   }
 

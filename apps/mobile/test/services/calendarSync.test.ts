@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Calendar from "expo-calendar";
-import type { SavedItem } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, type SavedItem } from "@milkbox/shared";
 import {
   createCalendarEventDrafts,
   DEVICE_CALENDAR_PROVIDER,
@@ -11,7 +11,7 @@ import {
 } from "../../src/services/calendarSync";
 
 jest.mock("expo-calendar", () => ({
-  Frequency: { WEEKLY: "weekly" },
+  Frequency: { DAILY: "daily", WEEKLY: "weekly", MONTHLY: "monthly", YEARLY: "yearly" },
   EntityTypes: { EVENT: "event" },
   getCalendarPermissionsAsync: jest.fn(),
 }));
@@ -25,6 +25,7 @@ const baseItem: SavedItem = {
   color: "#fff",
   notificationEnabled: false,
   notificationMinutesBefore: 30,
+  priority: DEFAULT_PRIORITY,
 };
 
 describe("calendar event mapping", () => {
@@ -59,6 +60,65 @@ describe("calendar event mapping", () => {
     });
     expect(draft.startDate.getHours()).toBe(9);
     expect(draft.startDate.getMinutes()).toBe(0);
+  });
+
+  describe("non-weekday recurrence", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date(2026, 8, 22)); // 2026-09-22
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it("anchors a biweekly draft on the next matching occurrence with a WEEKLY/interval:2 rule", () => {
+      const [draft] = createCalendarEventDrafts({
+        ...baseItem, startDate: "2026-09-08T10:00:00", endDate: undefined, recurrence: { type: "biweekly" },
+      });
+      expect(draft.startDate).toEqual(new Date(2026, 8, 22, 10, 0));
+      expect(draft.recurrenceRule).toEqual({ frequency: "weekly", interval: 2 });
+    });
+
+    it("builds a MONTHLY/interval:1 rule anchored on the next day-of-month occurrence", () => {
+      // 起点は8/5、現在時刻は9/22に固定しているため、直近の発生日は9/5(既に過ぎている)
+      // ではなく10/5になる。
+      const [draft] = createCalendarEventDrafts({
+        ...baseItem, startDate: "2026-08-05T08:00:00", endDate: undefined, recurrence: { type: "monthly" },
+      });
+      expect(draft.startDate).toEqual(new Date(2026, 9, 5, 8, 0));
+      expect(draft.recurrenceRule).toEqual({ frequency: "monthly", interval: 1, daysOfTheMonth: [5] });
+    });
+
+    it("uses the original anchor day (not the clamped next occurrence) for daysOfTheMonth", () => {
+      // 起点は1/31。現在時刻9/22基準の直近発生日はoccursOnDate()の月末クランプにより
+      // 9/30になるが、daysOfTheMonthはoccurrenceの30ではなく基準日31から組み立てる
+      // (でなければ再同期のたびに基準が30側へズレていく)。
+      const [draft] = createCalendarEventDrafts({
+        ...baseItem, startDate: "2026-01-31T08:00:00", endDate: undefined, recurrence: { type: "monthly" },
+      });
+      expect(draft.startDate).toEqual(new Date(2026, 8, 30, 8, 0));
+      // 31日は常に月内最大の日なので、月末(-1)として表せば「31日、無ければ月末」を
+      // 単一の値で表現でき、31日が存在する月でも重複発生しない。
+      expect(draft.recurrenceRule).toEqual({ frequency: "monthly", interval: 1, daysOfTheMonth: [-1] });
+    });
+
+    it("keeps a non-31 anchor day (e.g. 30) as a literal daysOfTheMonth value", () => {
+      const [draft] = createCalendarEventDrafts({
+        ...baseItem, startDate: "2026-04-30T08:00:00", endDate: undefined, recurrence: { type: "monthly" },
+      });
+      expect(draft.recurrenceRule).toEqual({ frequency: "monthly", interval: 1, daysOfTheMonth: [30] });
+    });
+
+    it("builds a DAILY/interval:N rule for everyNDays", () => {
+      const [draft] = createCalendarEventDrafts({
+        ...baseItem, startDate: "2026-09-20T07:00:00", endDate: undefined, recurrence: { type: "everyNDays", days: 4 },
+      });
+      expect(draft.startDate).toEqual(new Date(2026, 8, 24, 7, 0));
+      expect(draft.recurrenceRule).toEqual({ frequency: "daily", interval: 4 });
+    });
+
+    it("returns no drafts when there is no anchor startDate to compute an occurrence from", () => {
+      expect(createCalendarEventDrafts({ ...baseItem, startDate: undefined, recurrence: { type: "monthly" } }))
+        .toEqual([]);
+    });
   });
 });
 

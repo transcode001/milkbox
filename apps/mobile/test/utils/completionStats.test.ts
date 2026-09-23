@@ -1,8 +1,8 @@
-import type { SavedItem } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, type SavedItem } from "@milkbox/shared";
 import { countCategoryOccurrences } from "../../src/utils/completionStats";
 import { buildWeek } from "../../src/utils/calendarDates";
 
-const base: SavedItem = { id: 1, text: "予定", date: "2026-09-20", color: "#123456", notificationEnabled: false, notificationMinutesBefore: 30 };
+const base: SavedItem = { id: 1, text: "予定", date: "2026-09-20", color: "#123456", notificationEnabled: false, notificationMinutesBefore: 30, priority: DEFAULT_PRIORITY };
 const categories = [{ id: 1, name: "仕事", color: "#123456", icon: "briefcase-outline" }];
 it("counts each recurring occurrence and includes single and multiday tasks", () => {
   const result = countCategoryOccurrences([

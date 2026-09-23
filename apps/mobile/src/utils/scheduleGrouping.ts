@@ -32,8 +32,8 @@ export function formatScheduleTime(item: SavedItem): string {
   if (start && end) return `${start} 〜 ${end}`;
   if (start) return start;
   if (end) return `〜 ${end}`;
-  // 曜日繰り返しタスクの date は作成時刻が入るため時間表示には使わない
-  if (parseWeekdays(item.weekdays).length > 0) return "終日";
+  // 繰り返しタスクの date は作成時刻が入るため時間表示には使わない
+  if (parseWeekdays(item.weekdays).length > 0 || item.recurrence) return "終日";
   return formatTimeOfDay(item.date) ?? "終日";
 }
 
@@ -60,7 +60,7 @@ const getScheduleTimeValue = (item: SavedItem): number => {
   const value = [
     item.startDate,
     item.endDate,
-    ...(parseWeekdays(item.weekdays).length > 0 ? [] : [item.date]),
+    ...(parseWeekdays(item.weekdays).length > 0 || item.recurrence ? [] : [item.date]),
   ].find((candidate) => formatTimeOfDay(candidate) !== null);
   if (!value) return -Infinity;
   const date = new Date(value);

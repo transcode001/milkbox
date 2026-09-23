@@ -5,13 +5,14 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { Ionicons } from "@expo/vector-icons";
-import { DEFAULT_REMINDER_MINUTES } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, DEFAULT_REMINDER_MINUTES, type Priority, type Recurrence } from "@milkbox/shared";
 import { styles } from "../styles/screens/AddTaskScreen.styles";
 import { modalStyles } from "../styles/modalStyles";
 import { colors } from "../styles/tokens";
 import type { RootStackParamList } from "../navigation/types";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { useCategory } from "../hooks/useCategory";
+import { useTags } from "../hooks/useTags";
 import { useDatePicker } from "../hooks/useDatePicker";
 import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 import {
@@ -25,6 +26,9 @@ import { SelectModal, type SelectOption } from "../components/SelectModal";
 import { DEFAULT_CATEGORY_ICON } from "../constants/categoryIcons";
 import { CategoryEditorModal } from "../components/CategoryEditorModal";
 import { ColorPicker } from "../components/ColorPicker";
+import { PriorityButtonGroup } from "../components/PriorityButtonGroup";
+import { TagEditor } from "../components/TagEditor";
+import { RecurrenceEditor } from "../components/RecurrenceEditor";
 import { DEFAULT_COLORS } from "../constants/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "AddTask">;
@@ -57,6 +61,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
     handleUpdateCategory,
     handleDeleteCategory,
   } = useCategory({ dbManager });
+  const { tags, loadTags, createTag } = useTags({ dbManager });
   const {
     startDate,
     endDate,
@@ -75,6 +80,9 @@ const AddTaskScreen = ({ navigation }: Props) => {
   } = useDatePicker();
   const [text, setText] = useState("");
   const [taskColor, setTaskColor] = useState<string>(DEFAULT_COLORS.task);
+  const [priority, setPriority] = useState<Priority>(DEFAULT_PRIORITY);
+  const [selectedTagIds, setSelectedTagIds] = useState<number[]>([]);
+  const [recurrence, setRecurrence] = useState<Recurrence | null>(null);
   const [showPostSubmitModal, setShowPostSubmitModal] = useState(false);
   const [dateError, setDateError] = useState<string | null>(null);
   const [categoryError, setCategoryError] = useState<string | null>(null);
@@ -104,6 +112,8 @@ const AddTaskScreen = ({ navigation }: Props) => {
     () => parseWeekdays(categories.find((category) => category.id.toString() === selectedOption)?.weekdays),
     [categories, selectedOption],
   );
+  // 隔週/毎月/N日ごとはカテゴリ選択中でも起点の日付(日付ボタン)が必要になる。
+  const showDatePicker = noCategoryChecked || recurrence !== null;
   const hasSelectedDate = noCategoryChecked && (startHasDate || endHasDate);
   const effectiveWeekdays = resolveScheduleWeekdays(hasSelectedDate, inheritedWeekdays);
   const inheritedWeekdayLabel = inheritedWeekdays.length > 0
@@ -208,8 +218,15 @@ const AddTaskScreen = ({ navigation }: Props) => {
       return;
     }
 
-    const validationStartDate = noCategoryChecked ? startDate : stripDateForTimeOnlyComparison(startDate);
-    const validationEndDate = noCategoryChecked ? endDate : stripDateForTimeOnlyComparison(endDate);
+    if (recurrence && !startHasDate) {
+      setDateError("繰り返しには開始日を設定してください");
+      return;
+    }
+
+    // 繰り返し設定時は、通常カテゴリ選択時に使う「時刻だけ比較(日付部分を無視)」ではなく
+    // noCategoryChecked時と同じ「日付込み」の比較に揃える。
+    const validationStartDate = showDatePicker ? startDate : stripDateForTimeOnlyComparison(startDate);
+    const validationEndDate = showDatePicker ? endDate : stripDateForTimeOnlyComparison(endDate);
 
     if (isEndDateBeforeStartDate(validationStartDate, validationEndDate, startHasTime, endHasTime)) {
       setDateError("終了日時が開始日時より前です。終了日時を再設定してください。");
@@ -223,25 +240,31 @@ const AddTaskScreen = ({ navigation }: Props) => {
         text: text.trim(),
         date: fallbackDate.toISOString(),
         startDate:
-          startDate && (startHasTime || (noCategoryChecked && startHasDate))
+          startDate && (startHasTime || (showDatePicker && startHasDate))
             ? toSavedDate(startDate, startHasTime)
             : undefined,
         endDate:
-          endDate && (endHasTime || (noCategoryChecked && endHasDate))
+          endDate && (endHasTime || (showDatePicker && endHasDate))
             ? toSavedDate(endDate, endHasTime)
             : undefined,
         weekdays:
-          !noCategoryChecked && effectiveWeekdays.length > 0
+          !noCategoryChecked && !recurrence && effectiveWeekdays.length > 0
             ? JSON.stringify(effectiveWeekdays)
             : undefined,
         categoryId: noCategoryChecked ? undefined : Number(selectedOption),
         notificationEnabled: reminder.notificationEnabled,
         notificationMinutesBefore: reminder.notificationMinutesBefore,
         color: noCategoryChecked ? taskColor : DEFAULT_COLORS.task,
+        priority,
+        tagIds: selectedTagIds,
+        recurrence: recurrence ?? undefined,
       });
 
       setText("");
       setTaskColor(DEFAULT_COLORS.task);
+      setPriority(DEFAULT_PRIORITY);
+      setSelectedTagIds([]);
+      setRecurrence(null);
       clearDate("start");
       clearDate("end");
       reminder.resetReminder(DEFAULT_REMINDER_MINUTES, true);
@@ -257,10 +280,24 @@ const AddTaskScreen = ({ navigation }: Props) => {
   useEffect(() => {
     const initDatabase = async () => {
       await loadCategories();
+      await loadTags();
     };
 
     void initDatabase();
-  }, [loadCategories]);
+  }, [loadCategories, loadTags]);
+
+  const toggleTag = (tagId: number) => {
+    setSelectedTagIds((current) =>
+      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId],
+    );
+  };
+
+  const addNewTag = async (name: string): Promise<boolean> => {
+    const tag = await createTag(name);
+    if (!tag) return false;
+    setSelectedTagIds((current) => (current.includes(tag.id) ? current : [...current, tag.id]));
+    return true;
+  };
 
   const pickerValue = activeDatePicker?.field === "start" ? startDate ?? new Date() : endDate ?? new Date();
   const pickerDisplay = Platform.OS === "ios"
@@ -454,11 +491,31 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     </View>
                   ) : null}
 
+                  <View>
+                    <Text style={styles.dateLabel}>優先度</Text>
+                    <PriorityButtonGroup value={priority} onChange={setPriority} />
+                  </View>
+
+                  <View>
+                    <Text style={styles.dateLabel}>タグ</Text>
+                    <TagEditor
+                      allTags={tags}
+                      selectedTagIds={selectedTagIds}
+                      onToggleTag={toggleTag}
+                      onCreateTag={addNewTag}
+                    />
+                  </View>
+
+                  <View>
+                    <Text style={styles.dateLabel}>繰り返し</Text>
+                    <RecurrenceEditor value={recurrence} onChange={setRecurrence} />
+                  </View>
+
                   <View style={styles.dateRow}>
                     <View style={styles.dateFieldRow}>
                       <Text style={styles.dateFieldLabel}>開始</Text>
                       <View style={styles.dateControlRow}>
-                        {noCategoryChecked ? (
+                        {showDatePicker ? (
                           <TouchableOpacity
                             style={styles.dateSelectorButton}
                             onPress={() => openDatePicker("start", "date")}
@@ -488,7 +545,7 @@ const AddTaskScreen = ({ navigation }: Props) => {
                     <View style={styles.dateFieldRow}>
                       <Text style={styles.dateFieldLabel}>終了</Text>
                       <View style={styles.dateControlRow}>
-                        {noCategoryChecked ? (
+                        {showDatePicker ? (
                           <TouchableOpacity
                             style={styles.dateSelectorButton}
                             onPress={() => openDatePicker("end", "date")}

@@ -31,7 +31,7 @@ import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import { resolveReminderMinutesToRestore, type Category, type SavedItem } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, resolveReminderMinutesToRestore, type Category, type Priority, type Recurrence, type SavedItem, type Tag } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
@@ -40,7 +40,12 @@ import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
 import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { parseItemDate, startOfDay } from "../utils/calendarDates";
-import { DEFAULT_COLORS } from "../constants/colors";
+import { DEFAULT_COLORS, PRIORITY_COLORS } from "../constants/colors";
+import { PriorityButtonGroup } from "../components/PriorityButtonGroup";
+import { TagEditor } from "../components/TagEditor";
+import { RecurrenceEditor } from "../components/RecurrenceEditor";
+import { useTags } from "../hooks/useTags";
+import { formatRecurrenceLabel } from "../utils/recurrence";
 import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
 import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 
@@ -59,7 +64,7 @@ const DELETE_UNDO_TIMEOUT_MS = 5000;
 
 // utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
 // あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
-// といったカレンダー表示向けの正規化を行うのに対し、ここはサブタスク編集
+// といったカレンダー表示向けの正規化を行うのに対し、ここはタスク編集
 // フォームの初期値としてstartDate/endDateをそのままDateへ変換したいだけ
 // (時刻も保持する)ため、意図的に正規化していない。
 const parseOptionalDate = (value?: string | null): Date | null => {
@@ -94,6 +99,9 @@ const HomeScreen = ({ navigation }: Props) => {
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const [editItemText, setEditItemText] = useState("");
   const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
+  const [editItemPriority, setEditItemPriority] = useState<Priority>(DEFAULT_PRIORITY);
+  const [editItemTagIds, setEditItemTagIds] = useState<number[]>([]);
+  const [editItemRecurrence, setEditItemRecurrence] = useState<Recurrence | null>(null);
   const [editItemEndDate, setEditItemEndDate] = useState<Date | null>(null);
   const [showItemDatePicker, setShowItemDatePicker] = useState<
     "start" | "end" | null
@@ -103,6 +111,7 @@ const HomeScreen = ({ navigation }: Props) => {
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
   const completions = useItemCompletions();
+  const { tags, loadTags, createTag } = useTags({ dbManager });
   // スワイプ削除の対象。DBからは即座に消さず、この猶予期間だけ一覧から隠して
   // Undoできるようにする(visibleSectionsで実際のフィルタを行う)。
   const [pendingDelete, setPendingDelete] = useState<SavedItem | null>(null);
@@ -118,11 +127,22 @@ const HomeScreen = ({ navigation }: Props) => {
     try {
       setLoading(true);
       setErrorMessage(null);
-      const [result, categoryResult] = await Promise.all([
+      const [result, categoryResult, itemTags] = await Promise.all([
         dbManager.itemRepository.findAllWithCategory(),
         dbManager.categoryRepository.findAll(),
+        dbManager.tagRepository.findAllItemTags(),
       ]);
-      const grouped = groupByCategory(result);
+      const tagsByItemId = new Map<number, Tag[]>();
+      for (const { itemId, tag } of itemTags) {
+        const existing = tagsByItemId.get(itemId);
+        if (existing) {
+          existing.push(tag);
+        } else {
+          tagsByItemId.set(itemId, [tag]);
+        }
+      }
+      const withTags = result.map((item) => ({ ...item, tags: tagsByItemId.get(item.id) ?? [] }));
+      const grouped = groupByCategory(withTags);
 
       setSections(grouped);
       setCategories(categoryResult);
@@ -136,7 +156,8 @@ const HomeScreen = ({ navigation }: Props) => {
   useFocusEffect(
     useCallback(() => {
       void loadItems();
-    }, [loadItems])
+      void loadTags();
+    }, [loadItems, loadTags])
   );
 
   // buildWeek(...)[0]だけが欲しいだけなのに7日分のDate配列を毎レンダー組み立てる
@@ -286,12 +307,28 @@ const HomeScreen = ({ navigation }: Props) => {
     setEditItemText(item.text);
     setEditItemStartDate(parseOptionalDate(item.startDate));
     setEditItemEndDate(parseOptionalDate(item.endDate));
+    setEditItemPriority(item.priority);
+    setEditItemTagIds((item.tags ?? []).map((tag) => tag.id));
+    setEditItemRecurrence(item.recurrence ?? null);
     setShowItemDatePicker(null);
     // 一覧のベルアイコン(handleToggleItemNotification)は無効化しても
     // notificationMinutesBeforeを上書きしないため、現在は無効でも実際の値が
     // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
     // notificationMinutesBefore自体を見て復元用の値を決める。
     itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
+  };
+
+  const toggleEditItemTag = (tagId: number) => {
+    setEditItemTagIds((current) =>
+      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId],
+    );
+  };
+
+  const addNewEditItemTag = async (name: string): Promise<boolean> => {
+    const tag = await createTag(name);
+    if (!tag) return false;
+    setEditItemTagIds((current) => (current.includes(tag.id) ? current : [...current, tag.id]));
+    return true;
   };
 
   const handleUpdateItem = async () => {
@@ -308,6 +345,11 @@ const HomeScreen = ({ navigation }: Props) => {
       return;
     }
 
+    if (editItemRecurrence && !editItemStartDate) {
+      Alert.alert("エラー", "繰り返しには開始日を設定してください");
+      return;
+    }
+
     try {
       await dbManager.updateItem(editingItem.id, {
         text: trimmedText,
@@ -317,11 +359,19 @@ const HomeScreen = ({ navigation }: Props) => {
         // 無効で保存する場合もhandleToggleItemNotificationと同じ方針で、
         // NONE_REMINDER_VALUEで上書きせず元のタイミングを残す。
         notificationMinutesBefore: itemReminder.getPersistableMinutesBefore(),
+        priority: editItemPriority,
+        tagIds: editItemTagIds,
+        // 隔週/毎月/N日ごとを設定した場合、以前の曜日繰り返し(weekdays)を明示的に
+        // 解除する。AddTaskScreenの新規作成時と同様、両方の繰り返し機構が同時に
+        // 残っているとカレンダー表示・通知・カレンダー同期側は曜日指定を優先して
+        // しまい、新しい繰り返し設定が反映されない。
+        weekdays: editItemRecurrence ? null : undefined,
+        recurrence: editItemRecurrence,
       });
       setEditingItem(null);
       await loadItems();
     } catch {
-      Alert.alert("エラー", "サブタスクの更新に失敗しました");
+      Alert.alert("エラー", "タスクの更新に失敗しました");
     }
   };
 
@@ -481,7 +531,7 @@ const HomeScreen = ({ navigation }: Props) => {
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>サブタスクを編集</Text>
+            <Text style={styles.modalTitle}>タスクを編集</Text>
             <TextInput
               style={[styles.modalInput, styles.modalTextArea]}
               value={editItemText}
@@ -514,6 +564,17 @@ const HomeScreen = ({ navigation }: Props) => {
                 </TouchableOpacity>
               </View>
             </View>
+            <Text style={styles.fieldLabel}>優先度</Text>
+            <PriorityButtonGroup value={editItemPriority} onChange={setEditItemPriority} />
+            <Text style={styles.fieldLabel}>タグ</Text>
+            <TagEditor
+              allTags={tags}
+              selectedTagIds={editItemTagIds}
+              onToggleTag={toggleEditItemTag}
+              onCreateTag={addNewEditItemTag}
+            />
+            <Text style={styles.fieldLabel}>繰り返し</Text>
+            <RecurrenceEditor value={editItemRecurrence} onChange={setEditItemRecurrence} />
             {Platform.OS === "ios" && showItemDatePicker && (
               <View style={styles.datePickerPanel}>
                 <DateTimePicker
@@ -699,11 +760,26 @@ const HomeScreen = ({ navigation }: Props) => {
                           category={{ color: item.color || DEFAULT_COLORS.task }}
                         />
                       ) : null}
+                      <View
+                        style={[styles.priorityDot, { backgroundColor: PRIORITY_COLORS[item.priority] }]}
+                        accessibilityLabel={`優先度: ${item.priority}`}
+                      />
                       <Text style={[styles.itemText, completions.completedIds.has(item.id) && completionStyles.completedText]}>{item.text}</Text>
-                      {hasDateRange(item) && dateTimeRange ? (
+                      {item.recurrence ? (
+                        <Text style={styles.itemDateSummary}>{formatRecurrenceLabel(item.recurrence)}</Text>
+                      ) : hasDateRange(item) && dateTimeRange ? (
                         <Text style={styles.itemDateSummary}>{dateTimeRange}</Text>
                       ) : null}
                     </View>
+                    {item.tags && item.tags.length > 0 ? (
+                      <View style={styles.itemTagRow}>
+                        {item.tags.map((tag) => (
+                          <View key={tag.id} style={styles.itemTagChip}>
+                            <Text style={styles.itemTagChipText}>{tag.name}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.notificationToggle}

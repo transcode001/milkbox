@@ -1,6 +1,6 @@
 import type { SavedItem } from "@milkbox/shared";
-import { NONE_REMINDER_VALUE } from "@milkbox/shared";
-import { computeWeeklyTrigger, createReminderDate } from "../../src/services/notifications";
+import { DEFAULT_PRIORITY, NONE_REMINDER_VALUE } from "@milkbox/shared";
+import { computeWeeklyTrigger, createReminderDate, shouldScheduleNotification } from "../../src/services/notifications";
 
 const baseItem: SavedItem = {
   color: "#7986CB",
@@ -9,6 +9,7 @@ const baseItem: SavedItem = {
   date: "2026-01-01T00:00:00",
   notificationEnabled: true,
   notificationMinutesBefore: 30,
+  priority: DEFAULT_PRIORITY,
 };
 
 describe("createReminderDate", () => {
@@ -95,5 +96,34 @@ describe("computeWeeklyTrigger", () => {
   it("rolls Sunday back into Saturday when crossing midnight", () => {
     // 日曜0:00の5分前 → 土曜23:55
     expect(computeWeeklyTrigger(0, 0, 0, 5)).toEqual({ weekday: 7, hour: 23, minute: 55 });
+  });
+});
+
+describe("shouldScheduleNotification with a recurrence rule", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // 2026-01-08 10:00 (木曜)
+    jest.setSystemTime(new Date(2026, 0, 8, 10, 0, 0, 0));
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it("is true when the next occurrence's reminder time is still ahead", () => {
+    // 起点は2026-01-01(木)なので次の隔週発生は2026-01-15(木)。
+    const item: SavedItem = { ...baseItem, startDate: "2026-01-01T09:00:00", recurrence: { type: "biweekly" } };
+    expect(shouldScheduleNotification(item)).toBe(true);
+  });
+
+  it("skips a today's occurrence whose reminder time already passed and looks at the next one", () => {
+    // everyNDays=7、起点2026-01-01なので次の発生日は本日2026-01-08だが、
+    // 通知時刻9:00は現在時刻10:00より前 → その次(2026-01-15)を見て予定ありと判定する。
+    const item: SavedItem = {
+      ...baseItem, startDate: "2026-01-01T09:00:00", recurrence: { type: "everyNDays", days: 7 },
+    };
+    expect(shouldScheduleNotification(item)).toBe(true);
+  });
+
+  it("is false when there is no anchor startDate to compute an occurrence from", () => {
+    const item: SavedItem = { ...baseItem, recurrence: { type: "monthly" } };
+    expect(shouldScheduleNotification(item)).toBe(false);
   });
 });

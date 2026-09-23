@@ -1,3 +1,6 @@
+import type { Priority } from "@milkbox/shared";
+import { colors } from "../styles/tokens";
+
 export const COLOR_PALETTE = {
   warm: [
     "#F48FB1", "#EF5350", "#F44336", "#FF7043", "#FF9800", "#FFC107",
@@ -15,3 +18,11 @@ export const DEFAULT_COLORS = {
   task: "#7986CB",
   category: "#4CAF50",
 } as const;
+
+// 一覧の優先度ドット表示用。トークン化された意味色(destructive/pending)を流用し、
+// low専用の色は定義せず控えめなグレーにする。
+export const PRIORITY_COLORS: Record<Priority, string> = {
+  high: colors.destructive,
+  medium: colors.pending,
+  low: colors.tabInactive,
+};

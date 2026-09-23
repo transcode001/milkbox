@@ -20,6 +20,7 @@ import type { Category, SavedItem } from "@milkbox/shared";
 import { styles } from "../styles/screens/CalendarScreen.styles";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { parseWeekdays } from "../utils/weekdays";
+import { occursOnDate } from "../utils/recurrence";
 import { colors } from "../styles/tokens";
 import {
   buildMonthGrid,
@@ -94,10 +95,11 @@ const CalendarScreen = () => {
     }, [loadItems]),
   );
 
-  const { rangeItems, weekdayItems, weekdayBarItems, pointItemsByDate } = useMemo(() => {
+  const { rangeItems, weekdayItems, weekdayBarItems, recurringItems, pointItemsByDate } = useMemo(() => {
     const range: SavedItem[] = [];
     const weekday: SavedItem[] = [];
     const weekdayBarMap = new Map<string, { item: SavedItem; weekdays: Set<number> }>();
+    const recurring: SavedItem[] = [];
     const point = new Map<string, SavedItem[]>();
 
     for (const item of items) {
@@ -117,6 +119,13 @@ const CalendarScreen = () => {
             });
           }
         }
+        continue;
+      }
+
+      // 隔週/毎月/N日ごとはweekdaysともstartDate〜endDateの範囲指定とも別物なので、
+      // isMultiDayRange()やポイント日付の判定より先に分岐させる。
+      if (item.recurrence) {
+        recurring.push(item);
         continue;
       }
 
@@ -142,6 +151,7 @@ const CalendarScreen = () => {
         text: item.categoryName ?? item.text,
         weekdays: JSON.stringify([...weekdays].sort((left, right) => left - right)),
       })),
+      recurringItems: recurring,
       pointItemsByDate: point,
     };
   }, [items]);
@@ -152,6 +162,21 @@ const CalendarScreen = () => {
     () => (viewMode === "month" ? buildMonthGrid(visibleMonth) : []),
     [visibleMonth, viewMode],
   );
+  // 隔週/毎月/N日ごとはpointItemsByDate(特定の1日に紐づく予定)に入らないため、
+  // 月表示のグリッドに限って各セルごとに発生判定して予定マーク(ドット)の
+  // 集計に含める。月表示以外(週表示)ではmonthGridが空になり計算されない。
+  const recurringItemsByDate = useMemo(() => {
+    const map = new Map<string, SavedItem[]>();
+    if (recurringItems.length === 0) return map;
+
+    for (const week of monthGrid) {
+      for (const date of week) {
+        const matches = recurringItems.filter((item) => occursOnDate(item, date));
+        if (matches.length > 0) map.set(createDateKey(date), matches);
+      }
+    }
+    return map;
+  }, [monthGrid, recurringItems]);
   const todayKey = createDateKey(new Date());
   const selectedDateKey = createDateKey(selectedDate);
   const completions = useItemCompletions(selectedDateKey);
@@ -171,12 +196,16 @@ const CalendarScreen = () => {
       }
     }
 
+    for (const item of recurringItems) {
+      if (occursOnDate(item, sel)) result.push(item);
+    }
+
     result.push(...(pointItemsByDate.get(selectedDateKey) ?? []));
 
     // 時刻順の並べ替えはgroupScheduleItems()が同じgetScheduleTimeValue()で
     // 必ず行うため、ここでは行わない(二重ソート・二重の日付パースを避ける)。
     return result;
-  }, [rangeItems, weekdayItems, pointItemsByDate, selectedDate, selectedDateKey]);
+  }, [rangeItems, weekdayItems, recurringItems, pointItemsByDate, selectedDate, selectedDateKey]);
   // 表示モードで使う方だけ計算する(どちらもO(n log n)のソートを含むため、
   // 非表示側まで毎回計算するのは無駄)。
   const selectedItemGroups = useMemo(
@@ -291,7 +320,8 @@ const CalendarScreen = () => {
                       const isCurrentMonth = date.getMonth() === visibleMonth.getMonth();
                       const isSelected = dateKey === selectedDateKey;
                       const isToday = dateKey === todayKey;
-                      const pointCount = (pointItemsByDate.get(dateKey) ?? []).length;
+                      const pointCount = (pointItemsByDate.get(dateKey) ?? []).length
+                        + (recurringItemsByDate.get(dateKey) ?? []).length;
 
                       return (
                         <Pressable
@@ -301,6 +331,7 @@ const CalendarScreen = () => {
                             !isCurrentMonth && styles.dayCellMuted,
                           ]}
                           onPress={() => handleSelectDate(date)}
+                          accessibilityLabel={`${dateKey} 予定${pointCount}件`}
                         >
                           <Text
                             style={[

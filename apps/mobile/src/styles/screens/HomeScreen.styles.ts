@@ -115,6 +115,28 @@ export const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "500",
   },
+  priorityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  itemTagRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 4,
+  },
+  itemTagChip: {
+    paddingVertical: 2,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: "#EEEEEE",
+  },
+  itemTagChipText: {
+    fontSize: 11,
+    color: "#666",
+    fontWeight: "600",
+  },
   itemDateSummary: {
     flexShrink: 0,
     color: "#666",

@@ -1,10 +1,10 @@
-import type { SavedItem } from "@milkbox/shared";
+import { DEFAULT_PRIORITY, type SavedItem } from "@milkbox/shared";
 import { buildDayRange, moveDayRange, buildWeek, createDateKey, formatWeekRangeLabel } from "../../src/utils/calendarDates";
 import { getDayRangeSwipeOffset, getDayEvents, layoutDayEvents, type DayEvent } from "../../src/utils/weekTimeline";
 
 const item: SavedItem = {
   id: 1, text: "予定", date: "2026-07-20", color: "#7986CB",
-  notificationEnabled: false, notificationMinutesBefore: 30,
+  notificationEnabled: false, notificationMinutesBefore: 30, priority: DEFAULT_PRIORITY,
 };
 describe("week dates", () => {
   it("builds a Sunday-based week across year boundaries", () => {
@@ -40,6 +40,16 @@ describe("getDayEvents", () => {
     expect(getDayEvents([{ ...item, endDate: "2026-07-20T10:00:00" }], new Date(2026, 6, 20)).timed[0])
       .toMatchObject({ startMinutes: 540, endMinutes: 600 });
     expect(getDayEvents([{ ...item, date: "invalid" }], new Date(2026, 6, 20))).toEqual({ timed: [], allDay: [] });
+  });
+  it("expands a non-weekday recurrence (monthly/biweekly/everyNDays) on its matching days only", () => {
+    const monthly = { ...item, startDate: "2026-06-20T09:00:00", recurrence: { type: "monthly" as const } };
+    expect(getDayEvents([monthly], new Date(2026, 6, 20)).timed[0]).toMatchObject({ startMinutes: 540, endMinutes: 600 });
+    expect(getDayEvents([monthly], new Date(2026, 6, 21)).timed).toEqual([]);
+  });
+  it("puts an untimed recurring task in the all-day area, without falling back to item.date", () => {
+    const everyNDays = { ...item, date: "2026-07-20T16:00:00", startDate: "2026-07-20", recurrence: { type: "everyNDays" as const, days: 3 } };
+    expect(getDayEvents([everyNDays], new Date(2026, 6, 20)).allDay).toEqual([everyNDays]);
+    expect(getDayEvents([everyNDays], new Date(2026, 6, 20)).timed).toEqual([]);
   });
 });
 describe("layoutDayEvents", () => {

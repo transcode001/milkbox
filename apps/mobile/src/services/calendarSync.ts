@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Calendar from "expo-calendar";
 import type { SavedItem } from "@milkbox/shared";
 import { parseWeekdays } from "../utils/weekdays";
+import { findNextOccurrence } from "../utils/recurrence";
+import { parseItemDate as parseAnchorDate } from "../utils/calendarDates";
 import type { ItemCalendarLink } from "../repositories/sqlite/ItemRepository";
 
 export const DEVICE_CALENDAR_PROVIDER = "device";
@@ -52,6 +54,20 @@ function nextDateForWeekday(date: Date, weekday: number): Date {
   return result;
 }
 
+// 毎月タスクのdaysOfTheMonthを、基準日(1〜31)から組み立てる。
+// 月によっては基準日が存在しない(2月31日等)ため、expo-calendarのdaysOfTheMonthを
+// そのまま基準日1つだけにすると、その月は発生自体がスキップされてしまう
+// (occursOnDate()が行っている「月末へクランプ」とズレる)。
+// 31日だけは常に月内最大の日なので、代わりに-1(月末)を指定すれば
+// 「31日、無ければ月末」を単一の値で正確に表現できる(31日が存在する月では
+// -1も同じ日を指すため重複発生しない)。29・30日はこの単一値変換ができない
+// (BYSETPOS相当の機能がこのAPIのmonthly頻度には無いため、複数値を渡すと
+// 該当月に重複して発生してしまう)ので、基準日そのままとし、2月だけ発生しない
+// 既知の制約として許容する。
+function buildMonthlyDaysOfTheMonth(anchorDay: number): number[] {
+  return anchorDay === 31 ? [-1] : [anchorDay];
+}
+
 // item.startDate/endDateに時刻が含まれていればその時:分を返す。含まれていなければnull。
 function resolveTimeOfDay(value: string | undefined): { hour: number; minute: number } | null {
   if (!value || (!value.includes("T") && !value.includes(" "))) return null;
@@ -91,6 +107,50 @@ export function createCalendarEventDrafts(item: SavedItem): CalendarEventDraft[]
         recurrenceRule: { frequency: Calendar.Frequency.WEEKLY, interval: 1 },
       };
     });
+  }
+
+  if (item.recurrence) {
+    // 隔週/毎月/N日ごとも、実際の発生時刻はitem.dateではなくitem.startDate/endDateに
+    // 含まれる時刻を基準にする(曜日繰り返しと同じ前提)。開始日はfindNextOccurrence()で
+    // 求めた直近の発生日を使い、そこからの繰り返しは端末カレンダー側のRRULEに委ねる。
+    const occurrence = findNextOccurrence(item, new Date());
+    if (!occurrence) return [];
+
+    const startTime = resolveTimeOfDay(item.startDate) ?? { hour: DEFAULT_EVENT_HOUR, minute: 0 };
+    const endTime = resolveTimeOfDay(item.endDate);
+    const startMinutes = startTime.hour * 60 + startTime.minute;
+    const endMinutes = endTime ? endTime.hour * 60 + endTime.minute : null;
+    const durationMinutes = endMinutes !== null && endMinutes > startMinutes ? endMinutes - startMinutes : 60;
+    const startDate = new Date(
+      occurrence.getFullYear(), occurrence.getMonth(), occurrence.getDate(), startTime.hour, startTime.minute,
+    );
+
+    const recurrenceRule: Calendar.RecurrenceRule = item.recurrence.type === "biweekly"
+      ? { frequency: Calendar.Frequency.WEEKLY, interval: 2 }
+      : item.recurrence.type === "monthly"
+        ? {
+            frequency: Calendar.Frequency.MONTHLY,
+            interval: 1,
+            // occurrence(直近の発生日)ではなく、元の基準日(item.startDate)の日付を
+            // 使う。occurrenceは月末クランプ済みのことがあり、それをそのまま
+            // daysOfTheMonthに使うと同期のたびに基準がズレていく
+            // (例: 2月28日に同期すると、以後ずっと28日が基準になってしまう)。
+            // daysOfTheMonthはexpo-calendar上iOS限定。Androidはこのフィールドを
+            // 無視し、イベント自体のstartDate(=occurrence、直近の発生日)を基準に
+            // 繰り返すため、月末クランプ後の日で同期したタイミング次第では
+            // Android側だけ基準がズレたままになり得る(次回の再同期で復帰する)。
+            daysOfTheMonth: buildMonthlyDaysOfTheMonth((parseAnchorDate(item.startDate) ?? occurrence).getDate()),
+          }
+        : { frequency: Calendar.Frequency.DAILY, interval: item.recurrence.days };
+
+    return [{
+      title,
+      allDay: false,
+      notes,
+      startDate,
+      endDate: new Date(startDate.getTime() + durationMinutes * 60 * 1000),
+      recurrenceRule,
+    }];
   }
 
   const parsedStart = parseItemDate(item.startDate, item.date);

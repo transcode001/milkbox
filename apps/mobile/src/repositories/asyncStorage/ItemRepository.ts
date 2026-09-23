@@ -1,12 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { DEFAULT_REMINDER_MINUTES, IItemRepository, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
+import { DEFAULT_PRIORITY, DEFAULT_REMINDER_MINUTES, IItemRepository, isPriority, Priority, SavedItem, CreateItemDto, UpdateItemDto } from '@milkbox/shared';
 import { DEFAULT_COLORS } from '../../constants/colors';
 
 const DEFAULT_TASK_COLOR = DEFAULT_COLORS.task;
 
-type StoredItem = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore'> & {
+type StoredItem = Omit<SavedItem, 'notificationEnabled' | 'notificationMinutesBefore' | 'priority'> & {
   notificationEnabled?: boolean | number;
   notificationMinutesBefore?: number;
+  priority?: Priority;
 };
 
 export class AsyncStorageItemRepository implements IItemRepository {
@@ -25,6 +26,7 @@ export class AsyncStorageItemRepository implements IItemRepository {
       notificationEnabled:
         item.notificationEnabled !== false && item.notificationEnabled !== 0,
       notificationMinutesBefore: item.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
+      priority: isPriority(item.priority) ? item.priority : DEFAULT_PRIORITY,
     }));
   }
 
@@ -46,6 +48,8 @@ export class AsyncStorageItemRepository implements IItemRepository {
       color: data.color ?? DEFAULT_TASK_COLOR,
       notificationEnabled: data.notificationEnabled !== false,
       notificationMinutesBefore: data.notificationMinutesBefore ?? DEFAULT_REMINDER_MINUTES,
+      priority: data.priority ?? DEFAULT_PRIORITY,
+      recurrence: data.recurrence,
     };
     items.unshift(newItem);
     await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
@@ -67,6 +71,12 @@ export class AsyncStorageItemRepository implements IItemRepository {
       }
       if (data.color !== undefined) {
         items[index].color = data.color;
+      }
+      if (data.priority !== undefined) {
+        items[index].priority = data.priority;
+      }
+      if (data.recurrence !== undefined) {
+        items[index].recurrence = data.recurrence ?? undefined;
       }
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(items));
     }
