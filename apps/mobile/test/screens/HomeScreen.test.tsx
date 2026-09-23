@@ -31,6 +31,7 @@ const mockItemRepository = {
 const mockTagRepository = {
   findAll: jest.fn().mockResolvedValue([]),
   findAllItemTags: jest.fn().mockResolvedValue([]),
+  findTagsForItem: jest.fn().mockResolvedValue([]),
   create: jest.fn(),
 };
 const mockDbManager = {
@@ -84,6 +85,7 @@ describe("HomeScreen tag editing", () => {
   beforeEach(() => {
     mockUpdateItem.mockClear();
     mockTagRepository.findAllItemTags.mockReset().mockResolvedValue([{ itemId: 1, tag: { id: 1, name: "買い物" } }]);
+    mockTagRepository.findTagsForItem.mockReset().mockResolvedValue([{ id: 1, name: "買い物" }]);
     mockTagRepository.findAll.mockReset().mockResolvedValue([
       { id: 1, name: "買い物" },
       { id: 2, name: "急ぎ" },

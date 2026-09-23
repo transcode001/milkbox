@@ -10,9 +10,11 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
 import HomeScreen from "./src/screens/HomeScreen";
 import AddTaskScreen from "./src/screens/AddTaskScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
+import StatsScreen from "./src/screens/StatsScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import LicensesScreen from "./src/screens/LicensesScreen";
 import type { RootStackParamList, RootTabParamList } from "./src/navigation/types";
@@ -60,6 +62,17 @@ const TabNavigator = () => (
             style={{ width: size, height: size, tintColor: color }}
             resizeMode="contain"
           />
+        ),
+      }}
+    />
+    <Tab.Screen
+      name="Stats"
+      component={StatsScreen}
+      options={{
+        title: "統計",
+        headerShown: false,
+        tabBarIcon: ({ color, size }) => (
+          <Ionicons name="stats-chart-outline" size={size} color={color} />
         ),
       }}
     />

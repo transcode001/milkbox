@@ -109,3 +109,48 @@ export function moveDayRange(anchor: Date, count: number, offset: number): Date 
   const start = count === 7 ? buildWeek(anchor)[0] : anchor;
   return new Date(start.getFullYear(), start.getMonth(), start.getDate() + count * offset);
 }
+
+export function daysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
+
+// 統計画面の「月」表示用。buildMonthGrid()と違い、前後月の空白日を含めず
+// その月の実日数分だけを返す(集計対象を月内に厳密に限定するため)。
+export function buildMonthDates(anchor: Date): Date[] {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  return Array.from({ length: daysInMonth(year, month) }, (_, index) =>
+    new Date(year, month, index + 1));
+}
+
+// 統計画面の「年」表示用。1年分の全日付(365/366日)を月をまたいで平坦に返す。
+export function buildYearDates(anchor: Date): Date[] {
+  const year = anchor.getFullYear();
+  const dates: Date[] = [];
+  for (let month = 0; month < 12; month += 1) {
+    for (let day = 1; day <= daysInMonth(year, month); day += 1) {
+      dates.push(new Date(year, month, day));
+    }
+  }
+  return dates;
+}
+
+export function moveMonths(anchor: Date, offset: number): Date {
+  return new Date(anchor.getFullYear(), anchor.getMonth() + offset, 1);
+}
+
+export function moveYears(anchor: Date, offset: number): Date {
+  return new Date(anchor.getFullYear() + offset, anchor.getMonth(), 1);
+}
+
+export function formatDayLabel(date: Date): string {
+  return `${date.getMonth() + 1}月${date.getDate()}日`;
+}
+
+export function formatMonthNumberLabel(date: Date): string {
+  return `${date.getMonth() + 1}月`;
+}
+
+export function formatYearLabel(date: Date): string {
+  return `${date.getFullYear()}年`;
+}

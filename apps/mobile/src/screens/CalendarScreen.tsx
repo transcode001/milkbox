@@ -2,6 +2,8 @@ import { getGanttBarAppearance } from "../utils/ganttBars";
 import { CompletionStatsCard, CompletionStatusPill } from "../components/CompletionStatsCard";
 import { countCategoryOccurrences } from "../utils/completionStats";
 import { WeekTimeline } from "../components/WeekTimeline";
+import { TaskDetailBottomSheet } from "../components/TaskDetailBottomSheet";
+import { EditItemModal } from "../components/EditItemModal";
 import { CompletionCheckbox, completionStyles } from "../components/CompletionCheckbox";
 import { useItemCompletions } from "../hooks/useItemCompletions";
 import React, { useCallback, useMemo, useRef, useState } from "react";
@@ -69,6 +71,8 @@ const CalendarScreen = () => {
   const [items, setItems] = useState<SavedItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{ itemId: number; date: Date } | null>(null);
+  const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
   const scrollViewRef = useRef<ScrollView>(null);
   const scheduleHeaderYRef = useRef(0);
   const { dbManager } = useDatabaseManager();
@@ -232,8 +236,29 @@ const CalendarScreen = () => {
     });
   }, []);
 
+  // detailTarget自体にはitemのスナップショットを持たせず、常にitems(最新の
+  // 読み込み結果)からidで引き直す。スナップショットを持たせると、シートを
+  // 開いたまま通知トグルなどでitemsを再読み込みした時にシート側の表示が
+  // 古いまま固定されてしまう(トグルを連打しても同じ状態に戻るだけになる、
+  // 編集モーダルへ引き継ぐ値が古くなる、といった不具合の原因になる)。
+  const detailItem = detailTarget
+    ? items.find((candidate) => candidate.id === detailTarget.itemId) ?? null
+    : null;
+
   return (
     <SafeAreaView style={styles.container}>
+      <TaskDetailBottomSheet
+        item={detailItem}
+        occurrenceDate={detailTarget?.date ?? null}
+        onClose={() => setDetailTarget(null)}
+        onEdit={(item) => setEditingItem(item)}
+        onChanged={loadItems}
+      />
+      <EditItemModal
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onSaved={loadItems}
+      />
       <View style={localStyles.topToggleRow}>
         {viewMode === "week" ? (
           <View style={[styles.scheduleDisplayToggle, localStyles.topToggleHalf]} accessibilityRole="radiogroup">
@@ -284,6 +309,7 @@ const CalendarScreen = () => {
             setVisibleMonth(startOfDay(date));
           }}
           getWeekdayTint={getWeekdayTint}
+          onSelectItem={(item, date) => setDetailTarget({ itemId: item.id, date })}
         />
       ) : (
         <ScrollView ref={scrollViewRef} contentContainerStyle={styles.scrollContent}>

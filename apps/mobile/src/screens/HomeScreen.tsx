@@ -13,41 +13,27 @@ import {
   SectionList,
   ActivityIndicator,
   Alert,
-  Modal,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors } from "../styles/tokens";
 import { styles } from "../styles/screens/HomeScreen.styles";
-import { modalStyles } from "../styles/modalStyles";
 import { useFocusEffect, type CompositeScreenProps } from "@react-navigation/native";
-import DateTimePicker, {
-  DateTimePickerAndroid,
-  type DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
 import Swipeable from "react-native-gesture-handler/Swipeable";
 import type { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import { DEFAULT_PRIORITY, PRIORITY_OPTIONS, resolveReminderMinutesToRestore, type Category, type Priority, type Recurrence, type SavedItem, type Tag } from "@milkbox/shared";
+import { PRIORITY_OPTIONS, resolveReminderMinutesToRestore, type Category, type Priority, type SavedItem, type Tag } from "@milkbox/shared";
 import type { RootStackParamList, RootTabParamList } from "../navigation/types";
 import { UNCATEGORIZED_KEY } from "../utils/scheduleGrouping";
 import { CategorySection, groupByCategory } from "../utils/groupByCategory";
 import { SelectModal } from "../components/SelectModal";
 import { useDatabaseManager } from "../contexts/DatabaseContext";
 import { formatWeekdayLabels, parseWeekdays } from "../utils/weekdays";
-import { isEndDateBeforeStartDate } from "../utils/dateValidation";
 import { parseItemDate, startOfDay } from "../utils/calendarDates";
 import { DEFAULT_COLORS, PRIORITY_COLORS } from "../constants/colors";
-import { PriorityButtonGroup } from "../components/PriorityButtonGroup";
-import { TagEditor } from "../components/TagEditor";
-import { RecurrenceEditor } from "../components/RecurrenceEditor";
-import { useTags } from "../hooks/useTags";
+import { EditItemModal } from "../components/EditItemModal";
 import { formatRecurrenceLabel } from "../utils/recurrence";
-import { mergeDatePart, mergeTimePart } from "../hooks/useDatePicker";
-import { REMINDER_SELECT_OPTIONS, useReminderPicker } from "../hooks/useReminderPicker";
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<RootTabParamList, "Home">,
@@ -76,17 +62,6 @@ const NOTIFICATION_ENABLED_COLOR = "#333";
 // スワイプ削除後、実際にDBから消すまでUndoできる猶予時間。
 const DELETE_UNDO_TIMEOUT_MS = 5000;
 
-// utils/calendarDates.ts の parseItemDate/parsePointDate と似ているが別物。
-// あちらは「時刻を落として日付だけにする」「日付のみの文字列は9時扱いにする」
-// といったカレンダー表示向けの正規化を行うのに対し、ここはタスク編集
-// フォームの初期値としてstartDate/endDateをそのままDateへ変換したいだけ
-// (時刻も保持する)ため、意図的に正規化していない。
-const parseOptionalDate = (value?: string | null): Date | null => {
-  if (!value) return null;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
-
 const formatCategoryWeekdays = (section: CategorySection, category?: Category): string | null => {
   const categoryLabels = formatWeekdayLabels(category?.weekdays);
   if (categoryLabels) return categoryLabels;
@@ -111,21 +86,10 @@ const HomeScreen = ({ navigation }: Props) => {
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<SavedItem | null>(null);
-  const [editItemText, setEditItemText] = useState("");
-  const [editItemStartDate, setEditItemStartDate] = useState<Date | null>(null);
-  const [editItemPriority, setEditItemPriority] = useState<Priority>(DEFAULT_PRIORITY);
-  const [editItemTagIds, setEditItemTagIds] = useState<number[]>([]);
-  const [editItemRecurrence, setEditItemRecurrence] = useState<Recurrence | null>(null);
-  const [editItemEndDate, setEditItemEndDate] = useState<Date | null>(null);
-  const [showItemDatePicker, setShowItemDatePicker] = useState<
-    "start" | "end" | null
-  >(null);
-  const itemReminder = useReminderPicker();
   const [togglingNotificationItemId, setTogglingNotificationItemId] = useState<number | null>(null);
   const togglingNotificationRef = useRef(false);
   const { dbManager, notificationsEnabled } = useDatabaseManager();
   const completions = useItemCompletions();
-  const { tags, loadTags, createTag } = useTags({ dbManager });
   // スワイプ削除の対象。DBからは即座に消さず、この猶予期間だけ一覧から隠して
   // Undoできるようにする(visibleSectionsで実際のフィルタを行う)。
   const [pendingDelete, setPendingDelete] = useState<SavedItem | null>(null);
@@ -173,8 +137,7 @@ const HomeScreen = ({ navigation }: Props) => {
   useFocusEffect(
     useCallback(() => {
       void loadItems();
-      void loadTags();
-    }, [loadItems, loadTags])
+    }, [loadItems])
   );
 
   // buildWeek(...)[0]だけが欲しいだけなのに7日分のDate配列を毎レンダー組み立てる
@@ -321,131 +284,6 @@ const HomeScreen = ({ navigation }: Props) => {
 
   const openItemEditor = (item: SavedItem) => {
     setEditingItem(item);
-    setEditItemText(item.text);
-    setEditItemStartDate(parseOptionalDate(item.startDate));
-    setEditItemEndDate(parseOptionalDate(item.endDate));
-    setEditItemPriority(item.priority);
-    setEditItemTagIds((item.tags ?? []).map((tag) => tag.id));
-    setEditItemRecurrence(item.recurrence ?? null);
-    setShowItemDatePicker(null);
-    // 一覧のベルアイコン(handleToggleItemNotification)は無効化しても
-    // notificationMinutesBeforeを上書きしないため、現在は無効でも実際の値が
-    // 残っていることがある。useReminderPicker側もnotificationEnabledではなく
-    // notificationMinutesBefore自体を見て復元用の値を決める。
-    itemReminder.resetReminder(item.notificationMinutesBefore, item.notificationEnabled);
-  };
-
-  const toggleEditItemTag = (tagId: number) => {
-    setEditItemTagIds((current) =>
-      current.includes(tagId) ? current.filter((id) => id !== tagId) : [...current, tagId],
-    );
-  };
-
-  const addNewEditItemTag = async (name: string): Promise<boolean> => {
-    const tag = await createTag(name);
-    if (!tag) return false;
-    setEditItemTagIds((current) => (current.includes(tag.id) ? current : [...current, tag.id]));
-    return true;
-  };
-
-  const handleUpdateItem = async () => {
-    if (!editingItem) return;
-
-    const trimmedText = editItemText.trim();
-    if (!trimmedText) {
-      Alert.alert("エラー", "内容を入力してください");
-      return;
-    }
-
-    if (isEndDateBeforeStartDate(editItemStartDate, editItemEndDate)) {
-      Alert.alert("エラー", "終了日時が開始日時より前です。終了日時を再設定してください。");
-      return;
-    }
-
-    if (editItemRecurrence && !editItemStartDate) {
-      Alert.alert("エラー", "繰り返しには開始日を設定してください");
-      return;
-    }
-
-    try {
-      await dbManager.updateItem(editingItem.id, {
-        text: trimmedText,
-        startDate: editItemStartDate?.toISOString() ?? null,
-        endDate: editItemEndDate?.toISOString() ?? null,
-        notificationEnabled: itemReminder.notificationEnabled,
-        // 無効で保存する場合もhandleToggleItemNotificationと同じ方針で、
-        // NONE_REMINDER_VALUEで上書きせず元のタイミングを残す。
-        notificationMinutesBefore: itemReminder.getPersistableMinutesBefore(),
-        priority: editItemPriority,
-        tagIds: editItemTagIds,
-        // 隔週/毎月/N日ごとを設定した場合、以前の曜日繰り返し(weekdays)を明示的に
-        // 解除する。AddTaskScreenの新規作成時と同様、両方の繰り返し機構が同時に
-        // 残っているとカレンダー表示・通知・カレンダー同期側は曜日指定を優先して
-        // しまい、新しい繰り返し設定が反映されない。
-        weekdays: editItemRecurrence ? null : undefined,
-        recurrence: editItemRecurrence,
-      });
-      setEditingItem(null);
-      await loadItems();
-    } catch {
-      Alert.alert("エラー", "タスクの更新に失敗しました");
-    }
-  };
-
-  // iOS: mode="datetime" の spinner は宣言的な<DateTimePicker>のままで問題ないため据え置き。
-  // 操作中に onChange が連続発火するため、自動では閉じず既存の「閉じる」ボタンに任せる。
-  const handleItemDateChange = (_event: DateTimePickerEvent, selectedDate?: Date) => {
-    if (!selectedDate || !showItemDatePicker) return;
-
-    if (showItemDatePicker === "start") {
-      setEditItemStartDate(selectedDate);
-    } else {
-      setEditItemEndDate(selectedDate);
-    }
-  };
-
-  // Android: 宣言的な<DateTimePicker>をこの編集モーダル(RNのModalコンポーネント)の中に
-  // マウントすると、Modal自体が別ウィンドウのDialogとして描画されるAndroid上で、
-  // ネイティブのDatePickerDialog(FragmentベースでActivityのFragmentManagerを使う)と
-  // 競合してクラッシュすることがある。また"datetime"はAndroidでは無効なmodeで、
-  // 実際には日付のみのダイアログに縮退してしまい時刻編集ができていなかった。
-  // そのためAndroidだけは、Viewツリーに一切コンポーネントをマウントしない命令的API
-  // (DateTimePickerAndroid.open)を使い、日付→時刻の順に2段階でダイアログを出す。
-  const openAndroidItemDateTimePicker = (field: "start" | "end") => {
-    const base = (field === "start" ? editItemStartDate : editItemEndDate) ?? new Date();
-
-    DateTimePickerAndroid.open({
-      value: base,
-      mode: "date",
-      onChange: (dateEvent, selectedDate) => {
-        if (dateEvent.type !== "set" || !selectedDate) return;
-        const mergedDate = mergeDatePart(base, selectedDate);
-
-        DateTimePickerAndroid.open({
-          value: mergedDate,
-          mode: "time",
-          is24Hour: true,
-          onChange: (timeEvent, selectedTime) => {
-            if (timeEvent.type !== "set" || !selectedTime) return;
-            const finalDate = mergeTimePart(mergedDate, selectedTime);
-
-            if (field === "start") {
-              setEditItemStartDate(finalDate);
-            } else {
-              setEditItemEndDate(finalDate);
-            }
-          },
-        });
-      },
-    });
-  };
-
-  const openItemDateTimePicker = (field: "start" | "end") => {
-    if (Platform.OS === "android") {
-      openAndroidItemDateTimePicker(field);
-    } else {
-      setShowItemDatePicker(field);
-    }
   };
 
   const renderRightActions = (item: SavedItem) => (
@@ -566,131 +404,11 @@ const HomeScreen = ({ navigation }: Props) => {
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
-      <Modal
-        visible={editingItem !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setEditingItem(null)}
-      >
-        <KeyboardAvoidingView
-          style={styles.modalOverlay}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>タスクを編集</Text>
-            <TextInput
-              style={[styles.modalInput, styles.modalTextArea]}
-              value={editItemText}
-              onChangeText={setEditItemText}
-              placeholder="内容"
-              multiline={true}
-              textAlignVertical="top"
-            />
-            <View style={styles.dateRow}>
-              <View style={styles.dateColumn}>
-                <Text style={styles.fieldLabel}>開始日時</Text>
-                <TouchableOpacity
-                  style={styles.dateSelectorButton}
-                  onPress={() => openItemDateTimePicker("start")}
-                >
-                  <Text style={styles.dateSelectorButtonText}>
-                    {editItemStartDate ? formatItemDateTime(editItemStartDate.toISOString()) : "未設定"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.dateColumn}>
-                <Text style={styles.fieldLabel}>終了日時</Text>
-                <TouchableOpacity
-                  style={styles.dateSelectorButton}
-                  onPress={() => openItemDateTimePicker("end")}
-                >
-                  <Text style={styles.dateSelectorButtonText}>
-                    {editItemEndDate ? formatItemDateTime(editItemEndDate.toISOString()) : "未設定"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-            <Text style={styles.fieldLabel}>優先度</Text>
-            <PriorityButtonGroup value={editItemPriority} onChange={setEditItemPriority} />
-            <Text style={styles.fieldLabel}>タグ</Text>
-            <TagEditor
-              allTags={tags}
-              selectedTagIds={editItemTagIds}
-              onToggleTag={toggleEditItemTag}
-              onCreateTag={addNewEditItemTag}
-            />
-            <Text style={styles.fieldLabel}>繰り返し</Text>
-            <RecurrenceEditor value={editItemRecurrence} onChange={setEditItemRecurrence} />
-            {Platform.OS === "ios" && showItemDatePicker && (
-              <View style={styles.datePickerPanel}>
-                <DateTimePicker
-                  value={
-                    showItemDatePicker === "start"
-                      ? editItemStartDate ?? new Date()
-                      : editItemEndDate ?? new Date()
-                  }
-                  mode="datetime"
-                  is24Hour={true}
-                  display="spinner"
-                  onChange={handleItemDateChange}
-                  locale="ja-JP"
-                />
-                <TouchableOpacity
-                  style={styles.datePickerCloseButton}
-                  onPress={() => setShowItemDatePicker(null)}
-                >
-                  <Text style={styles.datePickerCloseButtonText}>閉じる</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-            <View style={styles.notificationRow}>
-              <TouchableOpacity
-                onPress={itemReminder.toggleReminderEnabled}
-                accessibilityRole="switch"
-                accessibilityLabel="通知タイミング"
-                accessibilityState={{ checked: itemReminder.notificationEnabled }}
-              >
-                <Ionicons
-                  name={itemReminder.notificationEnabled ? "notifications-outline" : "notifications-off-outline"}
-                  size={18}
-                  color={itemReminder.notificationEnabled ? NOTIFICATION_ENABLED_COLOR : colors.textSecondary}
-                />
-              </TouchableOpacity>
-              <View style={styles.notificationDropdown}>
-                <SelectModal
-                  options={REMINDER_SELECT_OPTIONS}
-                  selectedValue={itemReminder.notificationMinutesBefore.toString()}
-                  selectedLabel={itemReminder.selectedReminderLabel}
-                  isOpen={itemReminder.isReminderListOpen}
-                  disabled={!itemReminder.notificationEnabled}
-                  accessibilityLabel="通知タイミングを選択"
-                  onToggle={() => itemReminder.setIsReminderListOpen((current) => !current)}
-                  onClose={() => itemReminder.setIsReminderListOpen(false)}
-                  onSelect={(value) => itemReminder.selectReminderMinutes(Number(value))}
-                />
-              </View>
-            </View>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
-                onPress={() => setEditingItem(null)}
-              >
-                <Text style={[styles.modalButtonText, modalStyles.modalButtonCancelText]}>
-                  キャンセル
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonSubmit]}
-                onPress={() => {
-                  void handleUpdateItem();
-                }}
-              >
-                <Text style={styles.modalButtonText}>保存</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <EditItemModal
+        item={editingItem}
+        onClose={() => setEditingItem(null)}
+        onSaved={loadItems}
+      />
 
       <View style={styles.header}>
         <Text style={styles.title}>タスク</Text>

@@ -20,13 +20,16 @@ type Props = {
   // 並べたいため(Figma上でも同じ行の横並びトグルになっている)、CalendarScreen側で
   // 状態を持ち、ここへは表示のためのpropsとして渡す。
   dayCount: 1 | 3 | 7;
+  // タイムライン上の予定(終日・時間指定どちらも)をタップした時にタスク詳細
+  // ボトムシートを開くためのコールバック。指定がなければタップ不可のまま。
+  onSelectItem?: (item: SavedItem, date: Date) => void;
 };
 
 const TIME_AXIS_WIDTH = 32;
 const formatMinutes = (minutes: number) =>
   `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
 
-export function WeekTimeline({ items, selectedDate, onSelectDate, getWeekdayTint, dayCount }: Props) {
+export function WeekTimeline({ items, selectedDate, onSelectDate, getWeekdayTint, dayCount, onSelectItem }: Props) {
   const horizontalScrollRef = useRef<ScrollView>(null);
   const [now, setNow] = useState(() => new Date());
   const scrollRef = useRef<ScrollView>(null);
@@ -181,7 +184,11 @@ export function WeekTimeline({ items, selectedDate, onSelectDate, getWeekdayTint
                     <View key={createDateKey(day)} style={{ width: dayWidth, padding: 2 }}>
                       {allDay.map((item) => {
                         const color = resolveDisplayColor(item);
-                        return <Text key={item.id} style={[styles.allDayEvent, { color, backgroundColor: `${color}22`, borderLeftColor: color }]}>{item.text}</Text>;
+                        return (
+                          <Pressable key={item.id} onPress={() => onSelectItem?.(item, day)}>
+                            <Text style={[styles.allDayEvent, { color, backgroundColor: `${color}22`, borderLeftColor: color }]}>{item.text}</Text>
+                          </Pressable>
+                        );
                       })}
                     </View>
                   ))}
@@ -208,8 +215,9 @@ export function WeekTimeline({ items, selectedDate, onSelectDate, getWeekdayTint
                         const color = resolveDisplayColor(event.item);
                         const height = Math.min(1440 - event.startMinutes, Math.max(MIN_EVENT_MINUTES, event.endMinutes - event.startMinutes)) / 60 * HOUR_HEIGHT;
                         return (
-                          <View key={event.item.id}
+                          <Pressable key={event.item.id}
                             accessible accessibilityLabel={`${createDateKey(day)} ${event.item.text} ${formatMinutes(event.startMinutes)}`}
+                            onPress={() => onSelectItem?.(event.item, day)}
                             style={[styles.event, {
                               top: event.startMinutes / 60 * HOUR_HEIGHT,
                               height,
@@ -219,7 +227,7 @@ export function WeekTimeline({ items, selectedDate, onSelectDate, getWeekdayTint
                             }]}>
                             <Text numberOfLines={height >= 40 ? 2 : 1} style={[styles.eventTitle, { color }]}>{event.item.text}</Text>
                             <Text numberOfLines={1} style={[styles.eventTime, { color }]}>{formatMinutes(event.startMinutes)}</Text>
-                          </View>
+                          </Pressable>
                         );
                       })}
                     </View>
